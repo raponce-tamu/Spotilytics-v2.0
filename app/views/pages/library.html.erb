@@ -1,4 +1,31 @@
 <main class="container mt-4">
   <h1 class="text-light">Your Library</h1>
-  <p class="text-secondary">Your playlists will appear here soon.</p>
+
+  <% if flash[:alert].present? %>
+    <div class="alert alert-warning"><%= flash[:alert] %></div>
+  <% end %>
+
+  <% if @playlists.present? %>
+    <div class="row">
+      <% @playlists.each do |playlist| %>
+        <div class="col-md-4 mb-3">
+          <div class="card bg-dark text-light h-100">
+            <% if playlist.image_url.present? %>
+              <img src="<%= playlist.image_url %>" class="card-img-top" alt="<%= playlist.name %>">
+            <% end %>
+            <div class="card-body">
+              <h5 class="card-title"><%= playlist.name %></h5>
+              <p class="card-text text-secondary mb-1">Owner: <%= playlist.owner %></p>
+              <p class="card-text text-secondary mb-2">Tracks: <%= playlist.tracks_total %></p>
+              <% if playlist.spotify_url.present? %>
+                <a href="<%= playlist.spotify_url %>" target="_blank" rel="noopener" class="btn btn-spotify">Open in Spotify</a>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <p class="text-secondary">No playlists found.</p>
+  <% end %>
 </main>

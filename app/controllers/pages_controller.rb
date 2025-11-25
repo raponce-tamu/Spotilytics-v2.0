@@ -119,6 +119,13 @@ class PagesController < ApplicationController
   end
 
   def library
+    @playlists = fetch_user_playlists(limit: 50)
+  rescue SpotifyClient::UnauthorizedError
+    redirect_to home_path, alert: "You must log in with spotify to view your library." and return
+  rescue SpotifyClient::Error => e
+    Rails.logger.warn "Failed to fetch Spotify playlists: #{e.message}"
+    flash.now[:alert] = "We were unable to load your playlists from Spotify. Please try again later."
+    @playlists = []
   end
 
   private
@@ -145,6 +152,10 @@ class PagesController < ApplicationController
 
   def fetch_followed_artists(limit:)
     spotify_client.followed_artists(limit: limit)
+  end
+
+  def fetch_user_playlists(limit:)
+    spotify_client.user_playlists(limit: limit)
   end
 
   # Accept only 10, 25, 50; default to 10

@@ -106,6 +106,25 @@ class SpotifyClient
     end
   end
 
+  def user_playlists(limit: 50, offset: 0)
+    cache_for([ "user_playlists", limit, offset ]) do
+      access_token = ensure_access_token!
+      response = get("/me/playlists", access_token, limit: limit, offset: offset)
+      items = response.fetch("items", [])
+
+      items.map do |item|
+        OpenStruct.new(
+          id: item["id"],
+          name: item["name"],
+          image_url: item.dig("images", 0, "url"),
+          owner: item.dig("owner", "display_name") || item.dig("owner", "id"),
+          tracks_total: item.dig("tracks", "total") || 0,
+          spotify_url: item.dig("external_urls", "spotify")
+        )
+      end
+    end
+  end
+
 
   def top_artists(limit:, time_range:)
     cache_for([ "top_artists", time_range, limit ]) do
