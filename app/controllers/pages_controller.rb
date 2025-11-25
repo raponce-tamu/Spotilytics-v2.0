@@ -119,7 +119,7 @@ class PagesController < ApplicationController
   end
 
   def library
-    @playlists = fetch_user_playlists(limit: 50)
+    @playlists = fetch_user_playlists_all
   rescue SpotifyClient::UnauthorizedError
     redirect_to home_path, alert: "You must log in with spotify to view your library." and return
   rescue SpotifyClient::Error => e
@@ -154,8 +154,12 @@ class PagesController < ApplicationController
     spotify_client.followed_artists(limit: limit)
   end
 
-  def fetch_user_playlists(limit:)
-    spotify_client.user_playlists(limit: limit)
+  def fetch_user_playlists(limit:, offset: 0)
+    spotify_client.user_playlists(limit: limit, offset: offset)
+  end
+
+  def fetch_user_playlists_all
+    spotify_client.user_playlists_all
   end
 
   # Accept only 10, 25, 50; default to 10

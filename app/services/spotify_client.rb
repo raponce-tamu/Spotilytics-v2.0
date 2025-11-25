@@ -125,6 +125,21 @@ class SpotifyClient
     end
   end
 
+  def user_playlists_all(page_size: 50)
+    all_items = []
+    offset = 0
+
+    loop do
+      batch = user_playlists(limit: page_size, offset: offset)
+      all_items.concat(batch)
+      break if batch.size < page_size
+
+      offset += page_size
+    end
+
+    all_items
+  end
+
 
   def top_artists(limit:, time_range:)
     cache_for([ "top_artists", time_range, limit ]) do
