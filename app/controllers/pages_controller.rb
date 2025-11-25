@@ -1,7 +1,7 @@
 require "set"
 
 class PagesController < ApplicationController
-  before_action :require_spotify_auth!, only: %i[dashboard top_artists top_tracks view_profile clear]
+  before_action :require_spotify_auth!, only: %i[dashboard top_artists top_tracks view_profile clear library]
 
   TOP_ARTIST_TIME_RANGES = [
     { key: "long_term", label: "Past Year" },
@@ -116,6 +116,9 @@ class PagesController < ApplicationController
     Rails.logger.warn "Failed to fetch Spotify top tracks: #{e.message}"
     flash.now[:alert] = "We were unable to load your top tracks from Spotify. Please try again later."
     @top_tracks = []
+  end
+
+  def library
   end
 
   private

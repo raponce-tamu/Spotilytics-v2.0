@@ -16,6 +16,7 @@ Rails.application.routes.draw do
   get "/home", to: "pages#home", as: :home
   get "/view-profile", to: "pages#view_profile", as: :view_profile
   get "/clear", to: "pages#clear", as: :clear
+  get "/library", to: "pages#library", as: :library
   root "pages#home"
 
   # Callback from Spotify
