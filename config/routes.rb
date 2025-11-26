@@ -32,4 +32,19 @@ Rails.application.routes.draw do
 
   # Get Recommendations
   get  "recommendations",        to: "recommendations#recommendations",   as: :recommendations
+
+  resources :saved_shows, only: [ :index, :create, :destroy ] do
+    collection do
+      get :search
+    end
+  end
+
+  resources :saved_episodes, only: [ :index, :create, :destroy ] do
+    collection do
+      get :search
+    end
+  end
+
+get '/coverage/*path', to: redirect("/coverage/%{path}")
+
 end
