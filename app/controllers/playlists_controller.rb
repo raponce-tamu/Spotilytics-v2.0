@@ -108,11 +108,128 @@ class PlaylistsController < ApplicationController
     end
   end
 
+  def new
+    load_builder_state
+  end
+
+  def add_song
+    load_builder_state
+    query = params[:song_query].to_s.strip
+    if query.blank?
+      flash.now[:alert] = "Enter a song name to search and add."
+      render :new, status: :unprocessable_entity and return
+    end
+
+    begin
+      track = spotify_client.search_tracks(query, limit: 1).first
+      if track.present?
+        added = add_track_to_builder(track)
+        flash.now[:notice] = added ? "Added #{track.name} by #{track.artists}." : "#{track.name} is already in your list."
+      else
+        flash.now[:alert] = "No songs found for \"#{query}\"."
+      end
+      render :new
+    rescue SpotifyClient::UnauthorizedError
+      redirect_to root_path, alert: "Session expired. Please sign in with Spotify again."
+    rescue SpotifyClient::Error => e
+      flash.now[:alert] = "Couldn't search Spotify: #{e.message}"
+      render :new, status: :unprocessable_entity
+    end
+  end
+
+  def create_custom
+    load_builder_state
+
+    if @builder_tracks.empty?
+      flash.now[:alert] = "Add at least one song before creating your playlist."
+      render :new, status: :unprocessable_entity and return
+    end
+
+    begin
+      user_id = ensure_spotify_user_id
+      playlist_id = spotify_client.create_playlist_for(
+        user_id:     user_id,
+        name:        @playlist_name,
+        description: @playlist_description.presence || "Custom playlist created with Spotilytics",
+        public:      false
+      )
+
+      uris = @builder_tracks.map { |t| "spotify:track:#{t[:id] || t['id']}" }
+      spotify_client.add_tracks_to_playlist(playlist_id: playlist_id, uris: uris)
+
+      redirect_to new_playlist_path, notice: "Playlist created on Spotify: #{@playlist_name}"
+    rescue SpotifyClient::UnauthorizedError
+      redirect_to root_path, alert: "Session expired. Please sign in with Spotify again."
+    rescue SpotifyClient::Error => e
+      flash.now[:alert] = "Couldn't create playlist on Spotify: #{e.message}"
+      load_builder_state
+      render :new, status: :unprocessable_entity
+    end
+  end
+
   private
 
   def require_spotify_auth!
     unless session[:spotify_user].present?
       redirect_to root_path, alert: "Please sign in with Spotify first."
     end
+  end
+
+  def spotify_client
+    @spotify_client ||= SpotifyClient.new(session: session)
+  end
+
+  def ensure_spotify_user_id
+    user_info   = (session[:spotify_user] || {}).dup
+    indifferent = user_info.respond_to?(:with_indifferent_access) ? user_info.with_indifferent_access : user_info
+    user_id     = indifferent[:id].presence || indifferent["id"].presence
+
+    return user_id if user_id.present?
+
+    spotify_client.current_user_id
+  end
+
+  def load_builder_state
+    @builder_tracks = parse_tracks_params
+    @playlist_name = params[:playlist_name].presence || default_playlist_name
+    @playlist_description = params[:playlist_description].to_s
+  end
+
+  def add_track_to_builder(track)
+    existing = @builder_tracks.any? { |t| (t[:id] || t["id"]) == track.id }
+    return false if existing
+
+    @builder_tracks << {
+      id: track.id,
+      name: track.name,
+      artists: track.artists
+    }
+    true
+  end
+
+  def default_playlist_name
+    "My Spotilytics Playlist - #{Time.current.strftime('%b %d, %Y')}"
+  end
+
+  def parse_tracks_params
+    raw = params[:tracks]
+    return [] if raw.blank?
+
+    entries =
+      if raw.is_a?(ActionController::Parameters)
+        raw.to_unsafe_h.values
+      elsif raw.is_a?(Hash)
+        raw.values
+      else
+        Array(raw)
+      end
+
+    entries.map do |track|
+      {
+        id: track[:id] || track["id"],
+        name: track[:name] || track["name"],
+        artists: track[:artists] || track["artists"]
+      }
+    end.select { |t| t[:id].present? && t[:name].present? && t[:artists].present? }
   end
 end
