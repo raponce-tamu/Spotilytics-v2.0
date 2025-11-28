@@ -114,6 +114,13 @@ class PlaylistsController < ApplicationController
 
   def add_song
     load_builder_state
+
+    if params[:remove_track_id].present?
+      removed = remove_track_from_builder(params[:remove_track_id].to_s)
+      flash.now[:notice] = removed ? "Removed song from list." : "Song not found in list."
+      return render :new
+    end
+
     query = params[:song_query].to_s.strip
     if query.blank?
       flash.now[:alert] = "Enter a song name to search and add."
@@ -205,6 +212,12 @@ class PlaylistsController < ApplicationController
       artists: track.artists
     }
     true
+  end
+
+  def remove_track_from_builder(track_id)
+    before = @builder_tracks.size
+    @builder_tracks.reject! { |t| (t[:id] || t["id"]).to_s == track_id.to_s }
+    before != @builder_tracks.size
   end
 
   def default_playlist_name

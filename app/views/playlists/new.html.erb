@@ -48,7 +48,6 @@
                          disabled: @builder_tracks.empty? %>
         </div>
       </div>
-    <% end %>
 
     <hr class="border-secondary my-4">
 
@@ -61,12 +60,19 @@
               <div class="fw-semibold"><%= track[:name] %></div>
               <div class="text-secondary"><%= track[:artists] %></div>
             </div>
-            <span class="badge bg-success">Added</span>
+            <%= button_tag "Remove",
+                           type: :submit,
+                           name: :remove_track_id,
+                           value: track[:id],
+                           formaction: add_playlist_song_path,
+                           formmethod: :post,
+                           class: "btn btn-outline-danger btn-sm" %>
           </li>
         <% end %>
       </ol>
     <% else %>
       <p class="text-secondary mb-0">No songs yet. Add your first track using the search above.</p>
+    <% end %>
     <% end %>
   </div>
 </main>
