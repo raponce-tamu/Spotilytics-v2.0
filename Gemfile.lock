@@ -103,6 +103,7 @@ GEM
       bigdecimal
       rexml
     crass (1.0.6)
+    csv (3.3.5)
     cucumber (10.1.1)
       base64 (~> 0.2)
       builder (~> 3.2)
@@ -518,6 +519,7 @@ PLATFORMS
   aarch64-linux-musl
   arm-linux-gnu
   arm-linux-musl
+  arm64-darwin-24
   arm64-darwin-25
   x86_64-linux-gnu
   x86_64-linux-musl
@@ -527,6 +529,7 @@ DEPENDENCIES
   bootstrap (~> 5.3)
   brakeman
   capybara
+  csv
   cucumber-rails
   database_cleaner-active_record
   debug

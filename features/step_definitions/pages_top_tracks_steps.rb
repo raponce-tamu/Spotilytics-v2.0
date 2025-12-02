@@ -27,6 +27,7 @@ Given("a test endpoint that proxies to pages#top_tracks") do
     delete '/logout',    to: 'sessions#destroy', as: :logout
     get "/top_tracks",   to: "top_tracks#index", as: :top_tracks
     get 'recommendations', to: 'recommendations#recommendations', as: :recommendations
+    get '/playlists/new', to: 'playlists#new', as: :new_playlist
   end
 end
 

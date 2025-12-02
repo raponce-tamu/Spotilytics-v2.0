@@ -1,3 +1,5 @@
+require "csv"
+
 class PlaylistsController < ApplicationController
   before_action :require_spotify_auth!
 
@@ -108,11 +110,239 @@ class PlaylistsController < ApplicationController
     end
   end
 
+  def new
+    load_builder_state
+  end
+
+  def add_song
+    load_builder_state
+
+    if params[:remove_track_id].present?
+      removed = remove_track_from_builder(params[:remove_track_id].to_s)
+      flash.now[:notice] = removed ? "Removed song from list." : "Song not found in list."
+      return render :new
+    end
+
+    bulk_button   = params[:bulk_add].present?
+    single_button = params[:single_add].present?
+    file_button   = params[:file_add].present?
+    bulk_input    = params[:bulk_songs].to_s
+    query         = params[:song_query].to_s.strip
+    upload        = params[:tracks_csv]
+
+    if file_button
+      if upload.nil?
+        flash.now[:alert] = "Choose a CSV file with columns like title, artist."
+        return render :new, status: :unprocessable_entity
+      end
+
+      added = 0
+      duplicates = []
+      not_found = []
+
+      begin
+        csv = CSV.new(upload.read, headers: true)
+        csv.each do |row|
+          title  = row["title"] || row["track"] || row[0]
+          artist = row["artist"] || row["artists"] || row[1]
+          search = track_search_query(title: title, artist: artist)
+          next if search.blank?
+
+          track = spotify_client.search_tracks(search, limit: 1).first
+          if track.present?
+            if add_track_to_builder(track)
+              added += 1
+            else
+              duplicates << track.name
+            end
+          else
+            not_found << search
+          end
+        end
+      rescue CSV::MalformedCSVError
+        flash.now[:alert] = "Could not read that CSV file. Please check the formatting."
+        return render :new, status: :unprocessable_entity
+      end
+
+      notices = []
+      notices << "Added #{added} #{'song'.pluralize(added)}." if added.positive?
+      notices << "Skipped duplicates: #{duplicates.join(', ')}." if duplicates.any?
+      flash.now[:notice] = notices.join(" ") if notices.any?
+      flash.now[:alert] = "No matches for: #{not_found.join(', ')}." if not_found.any?
+      return render :new
+    end
+
+    if bulk_button
+      titles = bulk_input.split(",").map { |t| t.strip }.reject(&:blank?)
+      if titles.empty?
+        flash.now[:alert] = "Enter at least one song title."
+        return render :new, status: :unprocessable_entity
+      end
+
+      added = 0
+      not_found = []
+      duplicates = []
+
+      titles.each do |title|
+        track = spotify_client.search_tracks(track_search_query(title: title), limit: 1).first
+        if track.present?
+          if add_track_to_builder(track)
+            added += 1
+          else
+            duplicates << track.name
+          end
+        else
+          not_found << title
+        end
+      end
+
+      notices = []
+      notices << "Added #{added} #{'song'.pluralize(added)}." if added.positive?
+      notices << "Skipped duplicates: #{duplicates.join(', ')}." if duplicates.any?
+      flash.now[:notice] = notices.join(" ") if notices.any?
+      flash.now[:alert] = "No matches for: #{not_found.join(', ')}." if not_found.any?
+      return render :new
+    end
+
+    # default to single add if the single button was used (or no button but query present)
+    if single_button || query.present?
+      if query.blank?
+        flash.now[:alert] = "Enter a song name to search and add."
+        return render :new, status: :unprocessable_entity
+      end
+    else
+      flash.now[:alert] = "Choose a song to add."
+      return render :new, status: :unprocessable_entity
+    end
+
+    begin
+      track = spotify_client.search_tracks(query, limit: 1).first
+      if track.present?
+        added = add_track_to_builder(track)
+        flash.now[:notice] = added ? "Added #{track.name} by #{track.artists}." : "#{track.name} is already in your list."
+      else
+        flash.now[:alert] = "No songs found for \"#{query}\"."
+      end
+      render :new
+    rescue SpotifyClient::UnauthorizedError
+      redirect_to root_path, alert: "Session expired. Please sign in with Spotify again."
+    rescue SpotifyClient::Error => e
+      flash.now[:alert] = "Couldn't search Spotify: #{e.message}"
+      render :new, status: :unprocessable_entity
+    end
+  end
+
+  def create_custom
+    load_builder_state
+
+    if @builder_tracks.empty?
+      flash.now[:alert] = "Add at least one song before creating your playlist."
+      render :new, status: :unprocessable_entity and return
+    end
+
+    begin
+      user_id = ensure_spotify_user_id
+      playlist_id = spotify_client.create_playlist_for(
+        user_id:     user_id,
+        name:        @playlist_name,
+        description: @playlist_description.presence || "Custom playlist created with Spotilytics",
+        public:      false
+      )
+
+      uris = @builder_tracks.map { |t| "spotify:track:#{t[:id] || t['id']}" }
+      spotify_client.add_tracks_to_playlist(playlist_id: playlist_id, uris: uris)
+
+      redirect_to new_playlist_path, notice: "Playlist created on Spotify: #{@playlist_name}"
+    rescue SpotifyClient::UnauthorizedError
+      redirect_to root_path, alert: "Session expired. Please sign in with Spotify again."
+    rescue SpotifyClient::Error => e
+      flash.now[:alert] = "Couldn't create playlist on Spotify: #{e.message}"
+      load_builder_state
+      render :new, status: :unprocessable_entity
+    end
+  end
+
   private
 
   def require_spotify_auth!
     unless session[:spotify_user].present?
       redirect_to root_path, alert: "Please sign in with Spotify first."
     end
+  end
+
+  def spotify_client
+    @spotify_client ||= SpotifyClient.new(session: session)
+  end
+
+  def ensure_spotify_user_id
+    user_info   = (session[:spotify_user] || {}).dup
+    indifferent = user_info.respond_to?(:with_indifferent_access) ? user_info.with_indifferent_access : user_info
+    user_id     = indifferent[:id].presence || indifferent["id"].presence
+
+    return user_id if user_id.present?
+
+    spotify_client.current_user_id
+  end
+
+  def load_builder_state
+    @builder_tracks = parse_tracks_params
+    @playlist_name = params[:playlist_name].presence || default_playlist_name
+    @playlist_description = params[:playlist_description].to_s
+  end
+
+  def add_track_to_builder(track)
+    existing = @builder_tracks.any? { |t| (t[:id] || t["id"]) == track.id }
+    return false if existing
+
+    @builder_tracks << {
+      id: track.id,
+      name: track.name,
+      artists: track.artists
+    }
+    true
+  end
+
+  def remove_track_from_builder(track_id)
+    before = @builder_tracks.size
+    @builder_tracks.reject! { |t| (t[:id] || t["id"]).to_s == track_id.to_s }
+    before != @builder_tracks.size
+  end
+
+  def default_playlist_name
+    "My Spotilytics Playlist - #{Time.current.strftime('%b %d, %Y')}"
+  end
+
+  def track_search_query(title:, artist: nil)
+    t = title.to_s.strip
+    a = artist.to_s.strip
+    return "" if t.blank? && a.blank?
+
+    parts = []
+    parts << %(track:"#{t}") unless t.blank?
+    parts << %(artist:"#{a}") unless a.blank?
+
+    parts.join(" ")
+  end
+
+  def parse_tracks_params
+    raw = params[:tracks]
+    return [] if raw.blank?
+
+    entries =
+      if raw.is_a?(ActionController::Parameters)
+        raw.to_unsafe_h.values
+      elsif raw.is_a?(Hash)
+        raw.values
+      else
+        Array(raw)
+      end
+
+    entries.map do |track|
+      {
+        id: track[:id] || track["id"],
+        name: track[:name] || track["name"],
+        artists: track[:artists] || track["artists"]
+      }
+    end.select { |t| t[:id].present? && t[:name].present? && t[:artists].present? }
   end
 end

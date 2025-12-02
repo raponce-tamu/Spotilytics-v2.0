@@ -146,6 +146,107 @@ RSpec.describe TopTracksController, type: :controller do
       end
     end
 
+    context "when per-range limits are provided" do
+      let(:mock_client) { instance_double(SpotifyClient) }
+
+      before do
+        session[:spotify_user] = session_user
+        allow(SpotifyClient).to receive(:new).with(session: anything).and_return(mock_client)
+        allow(mock_client).to receive(:top_tracks).and_return([])
+      end
+
+      it "respects per-range limit parameters and falls back for invalid" do
+        get :index, params: { limit_short_term: "25", limit_medium_term: "50", limit_long_term: "999" }
+
+        expect(mock_client).to have_received(:top_tracks).with(limit: 25, time_range: "short_term")
+        expect(mock_client).to have_received(:top_tracks).with(limit: 50, time_range: "medium_term")
+        expect(mock_client).to have_received(:top_tracks).with(limit: 10, time_range: "long_term")
+      end
+    end
+
+    context "when medium and long hidden ids present and candidates are found" do
+      let(:mock_client) { instance_double(SpotifyClient) }
+
+      let(:initial_medium) { [ OpenStruct.new(id: "m1", name: "M One"), OpenStruct.new(id: "m3", name: "M Three") ] }
+      let(:initial_long)   { [ OpenStruct.new(id: "l2", name: "L Two") ] }
+
+      let(:candidates_medium) { [ OpenStruct.new(id: "m1", name: "M One"), OpenStruct.new(id: "m2", name: "M Two") ] }
+      let(:candidates_long)   { [ OpenStruct.new(id: "l1", name: "L One") ] }
+
+      before do
+        session[:spotify_user] = session_user.merge("id" => "hid_user2")
+        session[:hidden_top_tracks] = {
+          "hid_user2" => {
+            "short_term" => [],
+            "medium_term" => [ "m1", "m2" ],
+            "long_term" => [ "l1" ]
+          }
+        }
+
+        allow(SpotifyClient).to receive(:new).with(session: anything).and_return(mock_client)
+
+        allow(mock_client).to receive(:top_tracks) do |**kwargs|
+          tr = kwargs[:time_range].to_s
+          lim = kwargs[:limit].to_i
+          if lim == 10
+            case tr
+            when "short_term" then []
+            when "medium_term" then initial_medium
+            when "long_term" then initial_long
+            else []
+            end
+          else
+            case tr
+            when "medium_term" then candidates_medium
+            when "long_term" then candidates_long
+            else []
+            end
+          end
+        end
+      end
+
+      it "builds @hidden_medium/@hidden_long from candidates and filters tracks" do
+        get :index
+
+        expect(assigns(:hidden_medium).map(&:id)).to match_array(%w[m1 m2])
+        expect(assigns(:hidden_long).map(&:id)).to match_array(%w[l1])
+
+        expect(assigns(:tracks_medium).map(&:id)).not_to include("m1")
+        expect(assigns(:tracks_medium).map(&:id)).to include("m3")
+
+        expect(mock_client).to have_received(:top_tracks).with(hash_including(time_range: "medium_term", limit: 50))
+        expect(mock_client).to have_received(:top_tracks).with(hash_including(time_range: "long_term", limit: 50))
+      end
+    end
+
+    context "when hidden ids are present but candidate fetch returns none" do
+      let(:mock_client) { instance_double(SpotifyClient) }
+
+      before do
+        session[:spotify_user] = session_user.merge("id" => "user_missing")
+        session[:hidden_top_tracks] = { "user_missing" => { "short_term" => [ "missing_1" ], "medium_term" => [], "long_term" => [] } }
+
+        allow(SpotifyClient).to receive(:new).with(session: anything).and_return(mock_client)
+
+        allow(mock_client).to receive(:top_tracks) do |**kwargs|
+          if kwargs[:limit].to_i == 10
+            case kwargs[:time_range]
+            when "short_term" then [ OpenStruct.new(id: "present") ]
+            else []
+            end
+          else
+            []
+          end
+        end
+      end
+
+      it "logs missing hidden ids when candidates don't include them" do
+        allow(Rails.logger).to receive(:info)
+        get :index
+        expect(Rails.logger).to have_received(:info).with(/Hidden track ids not found/)
+      end
+    end
+
     context "when logged in with an invalid limit" do
       let(:mock_client) { instance_double(SpotifyClient) }
 
@@ -170,7 +271,6 @@ RSpec.describe TopTracksController, type: :controller do
     let(:user_id) { "cuke_user_1" }
 
     before do
-      # ensure user is signed in for positive tests by default
       session[:spotify_user] = { "id" => user_id, "display_name" => "Tester" }
     end
 
