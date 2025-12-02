@@ -40,17 +40,25 @@ Rails.application.routes.draw do
 
   # Saved Shows & Episodes (From your feature branch)
   resources :saved_shows, only: [ :index, :create, :destroy ] do
+    member do
+      post :recommendation
+      post :similar
+    end
     collection do
       get :search
+      get :bulk_recommendations
+      post :bulk_save
     end
   end
 
   resources :saved_episodes, only: [ :index, :create, :destroy ] do
+    member do
+      post :summarize
+    end
     collection do
       get :search
+      get :bulk_recommendations
+      post :bulk_save
     end
   end
-
-  # Test Coverage Report (From your feature branch)
-  get "/coverage/*path", to: redirect("/coverage/%{path}")
 end
