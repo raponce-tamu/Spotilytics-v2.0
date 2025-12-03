@@ -20,7 +20,7 @@ gem "jbuilder"
 gem "bootstrap", "~> 5.3"
 gem "sassc-rails"
 gem "sprockets-rails"
-
+gem "csv"
 
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 # gem "bcrypt", "~> 3.1.7"

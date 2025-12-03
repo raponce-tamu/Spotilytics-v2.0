@@ -21,10 +21,13 @@ class SpotifyClient
   end
 
   def search_tracks(query, limit: 10)
-    cache_for([ "search_tracks", limit ]) do
+    normalized_query = query.to_s.strip
+    return [] if normalized_query.empty?
+
+    cache_for([ "search_tracks", normalized_query.downcase, limit ]) do
       access_token = ensure_access_token!
       params = {
-        q: query,
+        q: normalized_query,
         type: "track",
         limit: limit
       }
