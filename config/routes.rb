@@ -29,8 +29,40 @@ Rails.application.routes.draw do
 
   # GET /top_tracks
   get "/top_tracks", to: "top_tracks#index", as: :top_tracks
+  post "/top_tracks/hide", to: "top_tracks#hide", as: :hide_top_track
+  post "/top_tracks/unhide", to: "top_tracks#unhide", as: :unhide_top_track
+
+  # Playlists (Merged from Main)
   post "/create_playlist", to: "playlists#create", as: :create_playlist
+  post "/create_playlist_from_recommendations", to: "playlists#create_from_recommendations", as: :create_playlist_from_recommendations
+  get "/playlists/new", to: "playlists#new", as: :new_playlist
+  post "/playlists/add_song", to: "playlists#add_song", as: :add_playlist_song
+  post "/playlists/custom", to: "playlists#create_custom", as: :create_custom_playlist
 
   # Get Recommendations
   get  "recommendations",        to: "recommendations#recommendations",   as: :recommendations
+
+  # Saved Shows & Episodes (From your feature branch)
+  resources :saved_shows, only: [ :index, :create, :destroy ] do
+    member do
+      post :recommendation
+      post :similar
+    end
+    collection do
+      get :search
+      get :bulk_recommendations
+      post :bulk_save
+    end
+  end
+
+  resources :saved_episodes, only: [ :index, :create, :destroy ] do
+    member do
+      post :summarize
+    end
+    collection do
+      get :search
+      get :bulk_recommendations
+      post :bulk_save
+    end
+  end
 end

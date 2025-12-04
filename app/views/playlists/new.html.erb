@@ -1,0 +1,104 @@
+<% content_for :extra_css do %>
+  <%= stylesheet_link_tag "dashboard", media: "all" %>
+<% end %>
+
+<main class="container mt-4">
+  <h1 class="text-light">Create Playlist</h1>
+  <p class="text-secondary">Name your playlist, add songs by keyword, then create it.</p>
+
+  <div class="spotify-card p-4">
+    <%= form_with url: add_playlist_song_path,
+                  method: :post,
+                  local: true,
+                  data: { turbo: false },
+                  html: { multipart: true },
+                  authenticity_token: true do %>
+      <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+      <% @builder_tracks.each_with_index do |track, idx| %>
+        <%= hidden_field_tag "tracks[#{idx}][id]", track[:id] %>
+        <%= hidden_field_tag "tracks[#{idx}][name]", track[:name] %>
+        <%= hidden_field_tag "tracks[#{idx}][artists]", track[:artists] %>
+      <% end %>
+
+      <div class="row g-3">
+        <div class="col-12">
+          <%= label_tag :playlist_name, "Playlist name", class: "form-label text-light" %>
+          <%= text_field_tag :playlist_name, @playlist_name, class: "form-control bg-dark text-white border-secondary" %>
+        </div>
+
+        <div class="col-12">
+          <%= label_tag :playlist_description, "Playlist description (optional)", class: "form-label text-light" %>
+          <%= text_area_tag :playlist_description, @playlist_description, rows: 2, class: "form-control bg-dark text-white border-secondary" %>
+        </div>
+
+        <div class="col-12">
+          <%= label_tag :song_query, "Add a song", class: "form-label text-light" %>
+          <p class="text-secondary small">Each click searches Spotify and adds the top match to your list below.</p>
+          <div class="d-flex flex-column flex-md-row gap-2">
+            <%= text_field_tag :song_query, params[:song_query], placeholder: "Song or artist keywords", class: "form-control bg-dark text-white border-secondary" %>
+            <%= submit_tag "Add song", name: :single_add, class: "btn btn-spotify px-4" %>
+          </div>
+        </div>
+
+        <div class="col-12">
+          <%= label_tag :bulk_songs, "Add multiple songs", class: "form-label text-light" %>
+          <p class="text-secondary small">Add a comma separated list of songs. We’ll search each title and add the top match.</p>
+          <%= text_area_tag :bulk_songs, params[:bulk_songs], rows: 2, placeholder: "Song title 1, Song title 2, Song title 3", class: "form-control bg-dark text-white border-secondary" %>
+          <div class="text-end mt-2">
+            <%= submit_tag "Add songs", name: :bulk_add, class: "btn btn-spotify btn-outline-light" %>
+          </div>        </div>
+
+        <div class="col-12">
+          <%= label_tag :tracks_csv, "Import songs (CSV)", class: "form-label text-light" %>
+          <p class="text-secondary small">Upload a CSV with columns like: title, artist</p>
+          <%= file_field_tag :tracks_csv, accept: ".csv,text/csv", class: "form-control bg-dark text-white border-secondary" %>
+          <div class="text-end mt-2">
+            <%= submit_tag "Upload CSV", name: :file_add, class: "btn btn-outline-info" %>
+          </div>
+        </div>
+
+        <div class="col-12">
+          <%= button_tag "Create playlist",
+                         type: :submit,
+                         formaction: create_custom_playlist_path,
+                         formmethod: :post,
+                         class: "btn btn-success w-100",
+                         disabled: @builder_tracks.empty? %>
+        </div>
+      </div>
+
+    <hr class="border-secondary my-4">
+
+    <h3 class="text-light fs-5 mb-3">Songs you’ve added</h3>
+    <% if @builder_tracks.any? %>
+      <ol class="list-group list-group-numbered">
+        <% @builder_tracks.each do |track| %>
+          <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between align-items-start">
+            <div class="me-3">
+              <% track_id = track[:id] || track["id"] %>
+              <% track_url = track_id.present? ? "https://open.spotify.com/track/#{track_id}" : nil %>
+              <div class="fw-semibold">
+                <% if track_url %>
+                  <%= link_to track[:name], track_url, target: "_blank", rel: "noopener", class: "text-light text-decoration-underline" %>
+                <% else %>
+                  <%= track[:name] %>
+                <% end %>
+              </div>
+              <div class="text-secondary"><%= track[:artists] %></div>
+            </div>
+            <%= button_tag "Remove",
+                           type: :submit,
+                           name: :remove_track_id,
+                           value: track[:id],
+                           formaction: add_playlist_song_path,
+                           formmethod: :post,
+                           class: "btn btn-outline-danger btn-sm" %>
+          </li>
+        <% end %>
+      </ol>
+    <% else %>
+      <p class="text-secondary mb-0">No songs yet. Add your first track using the search above.</p>
+    <% end %>
+    <% end %>
+  </div>
+</main>

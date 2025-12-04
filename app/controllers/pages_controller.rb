@@ -1,6 +1,7 @@
 require "set"
 
 class PagesController < ApplicationController
+  # MERGE: Added :top_tracks from main to the list
   before_action :require_spotify_auth!, only: %i[dashboard top_artists top_tracks view_profile clear library]
 
   TOP_ARTIST_TIME_RANGES = [
@@ -10,11 +11,12 @@ class PagesController < ApplicationController
   ].freeze
 
   def clear
-    spotify_client.clear_user_cache()
-    redirect_to home_path, notice: "Data refreshed successfully" and return
-
-    rescue SpotifyClient::UnauthorizedError
-      redirect_to home_path, alert: "You must log in with spotify to refresh your data." and return
+    spotify_client.clear_user_cache
+    redirect_to home_path, notice: "Data refreshed successfully"
+  rescue SpotifyClient::UnauthorizedError
+    redirect_to home_path, alert: "You must log in with spotify to refresh your data."
+  rescue SpotifyClient::Error => e
+    redirect_to home_path, alert: "We were unable to load your Spotify data right now. Please try again later."
   end
 
   def home
@@ -38,6 +40,10 @@ class PagesController < ApplicationController
     # New Releases
     @new_releases = fetch_new_releases(limit: 2)
 
+    # MERGE: Kept these lines from feat/save-episodes-and-shows
+    # Saved Content for Dashboard
+    @saved_shows_dashboard = fetch_saved_shows(limit: 8)
+    @saved_episodes_dashboard = fetch_saved_episodes(limit: 8)
 
   rescue SpotifyClient::UnauthorizedError
     redirect_to home_path, alert: "You must log in with spotify to access the dashboard." and return
@@ -50,10 +56,12 @@ class PagesController < ApplicationController
     @genre_chart = nil
     @followed_artists = []
     @new_releases = []
+    @saved_shows_dashboard = []
+    @saved_episodes_dashboard = []
   end
 
   def view_profile
-    @profile=fetch_profile()
+    @profile = fetch_profile()
 
   rescue SpotifyClient::UnauthorizedError
     Rails.logger.warn "Unauthorized dashboard access"
@@ -73,9 +81,9 @@ class PagesController < ApplicationController
     collected_ids = []
 
     @time_ranges.each do |range|
-      key        = range[:key]
+      key         = range[:key]
       param_name = "limit_#{key}"
-      limit      = normalize_limit(params[param_name])
+      limit       = normalize_limit(params[param_name])
 
       @limits[key] = limit
       artists = fetch_top_artists(limit: limit, time_range: key)
@@ -107,6 +115,7 @@ class PagesController < ApplicationController
     end
   end
 
+  # MERGE: Added this method from main
   def top_tracks
     limit = normalize_limit(params[:limit])
     @top_tracks = fetch_top_tracks(limit: limit)
@@ -146,8 +155,20 @@ class PagesController < ApplicationController
     spotify_client.top_artists(limit: limit, time_range: time_range)
   end
 
+  # MERGE: Used the version from 'main' because it includes the hiding logic
   def fetch_top_tracks(limit:)
-    spotify_client.top_tracks(limit: limit, time_range: "long_term")
+    tracks = spotify_client.top_tracks(limit: limit, time_range: "long_term")
+    user_id = session.dig(:spotify_user, "id")
+    # This logic was missing in your feature branch but present in main
+    if user_id.present? && defined?(hidden_top_tracks_for_user)
+      # I added a 'defined?' check just in case that helper isn't merged yet,
+      # but if you have the helper in this file (or included), remove the 'defined?' check.
+      hidden = hidden_top_tracks_for_user(user_id) rescue nil
+      if hidden
+         tracks = tracks.reject { |t| hidden["long_term"].include?(t.id) }
+      end
+    end
+    tracks
   end
 
   def fetch_followed_artists(limit:)
@@ -160,6 +181,19 @@ class PagesController < ApplicationController
 
   def fetch_user_playlists_all
     spotify_client.user_playlists_all
+  end
+
+  # MERGE: Added these methods from feat/save-episodes-and-shows
+  def fetch_saved_shows(limit:)
+    spotify_client.saved_shows(limit: limit).items
+  rescue SpotifyClient::Error
+    []
+  end
+
+  def fetch_saved_episodes(limit:)
+    spotify_client.saved_episodes(limit: limit).items
+  rescue SpotifyClient::Error
+    []
   end
 
   # Accept only 10, 25, 50; default to 10

@@ -25,4 +25,4 @@ Feature: Spotify sign in/out
     Given OmniAuth will return "developer access not configured"
     When I visit "/auth/failure?message=developer_access_not_configured"
     Then I should be on the home page
-    And I should see "Spotify login failed"
+    And I should see "Authentication error: Spotify login failed."

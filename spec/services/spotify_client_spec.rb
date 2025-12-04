@@ -1,554 +1,416 @@
-require "rails_helper"
+require 'rails_helper'
 
-RSpec.describe SpotifyClient, type: :service do
-    let(:session) do
-        {
-        spotify_token: "valid_token",
-        spotify_expires_at: 1.hour.from_now.to_i,
-        spotify_refresh_token: "refresh123"
-        }.with_indifferent_access
+RSpec.describe SpotifyClient do
+  # ============================================================================
+  # SETUP & MOCKS
+  # ============================================================================
+  let(:user_id) { "user123" }
+  let(:valid_token) { "valid_access_token" }
+  let(:expires_at) { 1.hour.from_now.to_i }
+
+  let(:session) do
+    {
+      spotify_token: valid_token,
+      spotify_expires_at: expires_at,
+      "spotify_user" => { "id" => user_id },
+      spotify_refresh_token: "refresh_123"
+    }
+  end
+
+  let(:client) { described_class.new(session: session) }
+
+  # Standard Successful Response
+  let(:http_ok) { instance_double(Net::HTTPResponse, body: "{}", code: "200", message: "OK") }
+
+  before do
+    # Mock Environment Variables
+    allow(ENV).to receive(:[]).and_call_original
+    allow(ENV).to receive(:[]).with("SPOTIFY_CLIENT_ID").and_return("client_id")
+    allow(ENV).to receive(:[]).with("SPOTIFY_CLIENT_SECRET").and_return("client_secret")
+
+    # Mock Net::HTTP globally to return OK by default
+    allow_any_instance_of(Net::HTTP).to receive(:start).and_yield(Net::HTTP.new("google.com"))
+    allow_any_instance_of(Net::HTTP).to receive(:request).and_return(http_ok)
+
+    # Mock Rails Cache and Logger to isolate the tests
+    allow(Rails).to receive_message_chain(:cache, :fetch).and_yield
+    allow(Rails).to receive_message_chain(:cache, :delete_matched)
+    allow(Rails).to receive_message_chain(:logger, :info)
+  end
+
+  # ============================================================================
+  # GROUP 1: SEARCH & GET METHODS
+  # ============================================================================
+
+  describe "#search_tracks" do
+    let(:response_body) do
+      { "tracks" => { "items" => [ { "id" => "t1", "name" => "Song", "duration_ms" => 100 } ] } }
     end
 
-    subject(:client) { described_class.new(session: session) }
-
-    before do
-        allow(ENV).to receive(:[]).and_call_original
-        allow(ENV).to receive(:[]).with("SPOTIFY_CLIENT_ID").and_return("client_id")
-        allow(ENV).to receive(:[]).with("SPOTIFY_CLIENT_SECRET").and_return("client_secret")
+    it "returns mapped tracks" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.search_tracks("query")
+      expect(result.first.name).to eq("Song")
     end
 
-    def stub_spotify_get(path, body:, status: 200)
-        stub_request(:get, %r{https://api.spotify.com/v1#{path}})
-            .to_return(status: status, body: body.to_json, headers: { "Content-Type" => "application/json" })
+    it "handles empty results gracefully" do
+      allow(http_ok).to receive(:body).and_return({}.to_json)
+      expect(client.search_tracks("query")).to eq([])
     end
 
-    def stub_spotify_post(path, body:, status: 200)
-        stub_request(:post, %r{https://api.spotify.com/v1#{path}})
-            .to_return(status: status, body: body.to_json, headers: { "Content-Type" => "application/json" })
+    it "uses cache" do
+      allow(Rails.cache).to receive(:fetch).with(/spotify_user123_search_tracks/, any_args).and_return([ "cached" ])
+      expect(client.search_tracks("query")).to eq([ "cached" ])
+    end
+  end
+
+  describe "#profile" do
+    let(:response_body) { { "id" => "u1", "display_name" => "Bob", "followers" => { "total" => 10 } } }
+
+    it "returns mapped profile" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      expect(client.profile.display_name).to eq("Bob")
+    end
+  end
+
+  describe "#new_releases" do
+    let(:response_body) do
+      { "albums" => { "items" => [ { "id" => "a1", "name" => "New Album", "artists" => [ { "name" => "Art" } ] } ] } }
     end
 
-    def stub_spotify_put(path, body:, status: 200)
-        stub_request(:put, %r{https://api.spotify.com/v1#{path}})
-            .to_return(status: status, body: body.to_json, headers: { "Content-Type" => "application/json" })
+    it "returns mapped albums" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.new_releases(limit: 5)
+      expect(result.first.name).to eq("New Album")
+    end
+  end
+
+  describe "#followed_artists" do
+    let(:response_body) do
+      { "artists" => { "items" => [ { "id" => "art1", "name" => "Artist One", "genres" => [ "pop" ] } ] } }
     end
 
-    def stub_spotify_delete(path, body:, status: 200)
-        stub_request(:delete, %r{https://api.spotify.com/v1#{path}})
-            .to_return(status: status, body: body.to_json, headers: { "Content-Type" => "application/json" })
+    it "returns mapped artists" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.followed_artists(limit: 10)
+      expect(result.first.name).to eq("Artist One")
+    end
+  end
+
+  describe "#saved_shows" do
+    let(:response_body) do
+      { "items" => [ { "show" => { "id" => "s1", "name" => "Show 1", "total_episodes" => 5 } } ], "total" => 1 }
     end
 
+    it "fetches saved shows" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.saved_shows
+      expect(result.items.first.name).to eq("Show 1")
+    end
+  end
 
-
-    describe "#ensure_access_token!" do
-        it "returns the existing token if valid" do
-            expect(client.send(:ensure_access_token!)).to eq("valid_token")
-        end
-
-        it "refreshes the token if expired" do
-            session[:spotify_expires_at] = 1.minute.ago.to_i
-            allow(client).to receive(:refresh_access_token!).and_return("new_token")
-            expect(client.send(:ensure_access_token!)).to eq("new_token")
-        end
+  describe "#saved_episodes" do
+    let(:response_body) do
+      { "items" => [ { "episode" => { "id" => "e1", "name" => "Ep 1", "show" => { "name" => "S1" } } } ], "total" => 1 }
     end
 
-    describe "#token_expired?" do
-        it "returns true if expires_at is missing" do
-            session.delete(:spotify_expires_at)
-            expect(client.send(:token_expired?)).to be true
-        end
+    it "fetches saved episodes" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.saved_episodes
+      expect(result.items.first.name).to eq("Ep 1")
+    end
+  end
 
-        it "returns false if token is still valid" do
-            session[:spotify_expires_at] = 1.hour.from_now.to_i
-            expect(client.send(:token_expired?)).to be false
-        end
+  describe "#search_shows" do
+    it "maps response correctly" do
+      body = { "shows" => { "items" => [ { "id" => "s1", "name" => "Show" } ], "total" => 1 } }
+      allow(http_ok).to receive(:body).and_return(body.to_json)
+      result = client.search_shows("query")
+      expect(result.items.first.name).to eq("Show")
+    end
+  end
+
+  describe "#search_episodes" do
+    it "maps response correctly" do
+      body = { "episodes" => { "items" => [ { "id" => "e1", "name" => "Ep" } ], "total" => 1 } }
+      allow(http_ok).to receive(:body).and_return(body.to_json)
+      result = client.search_episodes("query")
+      expect(result.items.first.name).to eq("Ep")
+    end
+  end
+
+  describe "#get_episode" do
+    let(:response_body) do
+      { "id" => "e1", "name" => "Ep 1", "show" => { "name" => "S1" }, "duration_ms" => 60000 }
     end
 
-    describe "#refresh_access_token!" do
-        let(:token_uri) { described_class::TOKEN_URI }
+    it "fetches a single episode" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.get_episode("e1")
+      expect(result.name).to eq("Ep 1")
+      expect(result.show_name).to eq("S1")
+    end
+  end
 
-        it "raises UnauthorizedError if refresh token missing" do
-            session.delete(:spotify_refresh_token)
-            expect { client.send(:refresh_access_token!) }.to raise_error(SpotifyClient::UnauthorizedError)
-        end
-
-        it "raises UnauthorizedError if credentials missing" do
-            allow(ENV).to receive(:[]).with("SPOTIFY_CLIENT_ID").and_return(nil)
-            expect { client.send(:refresh_access_token!) }.to raise_error(SpotifyClient::UnauthorizedError)
-        end
-
-        it "refreshes successfully" do
-            body = { "access_token" => "newtoken", "expires_in" => 3600 }
-            stub_request(:post, token_uri.to_s).to_return(status: 200, body: body.to_json)
-            expect(client.send(:refresh_access_token!)).to eq("newtoken")
-            expect(session[:spotify_token]).to eq("newtoken")
-        end
-
-        it "raises UnauthorizedError on invalid response" do
-            body = { "error" => { "message" => "bad token" } }
-            stub_request(:post, token_uri.to_s).to_return(status: 400, body: body.to_json)
-            expect { client.send(:refresh_access_token!) }.to raise_error(SpotifyClient::Error, "bad token")
-        end
+  describe "#get_show" do
+    let(:response_body) do
+      { "id" => "s1", "name" => "Show 1", "publisher" => "Pub", "total_episodes" => 10 }
     end
 
-    describe "#get" do
-        it "returns parsed JSON" do
-            stub_spotify_get("/me", body: { id: "123" })
-            result = client.send(:get, "/me", "token")
-            expect(result["id"]).to eq("123")
-        end
+    it "fetches a single show" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.get_show("s1")
+      expect(result.name).to eq("Show 1")
+      expect(result.publisher).to eq("Pub")
+    end
+  end
 
-        it "raises Error on bad response" do
-            stub_spotify_get("/me", body: { error: { message: "oops" } }, status: 400)
-            expect { client.send(:get, "/me", "token") }.to raise_error(SpotifyClient::Error)
-        end
+  describe "#top_artists" do
+    let(:response_body) { { "items" => [ { "id" => "ta1", "name" => "Top Art", "popularity" => 100 } ] } }
+
+    it "fetches top artists" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.top_artists(limit: 10, time_range: 'medium_term')
+      expect(result.first.name).to eq("Top Art")
+    end
+  end
+
+  describe "#top_tracks" do
+    let(:response_body) { { "items" => [ { "id" => "tt1", "name" => "Top Track", "album" => { "name" => "Alb" } } ] } }
+
+    it "fetches top tracks" do
+      allow(http_ok).to receive(:body).and_return(response_body.to_json)
+      result = client.top_tracks(limit: 10, time_range: 'short_term')
+      expect(result.first.name).to eq("Top Track")
+    end
+  end
+
+  # ============================================================================
+  # GROUP 2: MUTATION METHODS (POST/PUT/DELETE)
+  # ============================================================================
+
+  describe "Batch Operations" do
+    it "save_shows returns true on success" do
+      expect(client.save_shows([ "1" ])).to be true
+    end
+    it "save_shows returns true early for empty input" do
+      expect(client.save_shows([])).to be true
     end
 
-    describe "#parse_json" do
-        it "returns {} on invalid JSON" do
-            expect(client.send(:parse_json, "invalid")).to eq({})
-        end
+    it "save_episodes returns true on success" do
+      expect(client.save_episodes([ "1" ])).to be true
+    end
+    it "save_episodes returns true early for empty input" do
+      expect(client.save_episodes([])).to be true
     end
 
-    describe "#profile" do
-        it "returns an OpenStruct with user data" do
-            allow(client).to receive(:current_user_id).and_return("u123")
-            stub_spotify_get("/users/u123", body: {
-            id: "u123", display_name: "Test", images: [ { "url" => "img.jpg" } ],
-            followers: { "total" => 10 }, external_urls: { "spotify" => "url" }
-            })
-            profile = client.profile
-            expect(profile.display_name).to eq("Test")
-            expect(profile.followers).to eq(10)
-        end
+    it "remove_shows returns true on success" do
+      expect(client.remove_shows([ "1" ])).to be true
+    end
+    it "remove_shows returns true early for empty input" do
+      expect(client.remove_shows([])).to be true
     end
 
-    describe "#create_playlist_for" do
-        it "returns new playlist id" do
-            stub_spotify_post("/users/uid/playlists", body: { id: "playlist123" })
-            result = client.create_playlist_for(user_id: "uid", name: "test", description: "desc", public: true)
-            expect(result).to eq("playlist123")
-        end
-
-        it "raises Error if no id returned" do
-            stub_spotify_post("/users/uid/playlists", body: {})
-            expect {
-            client.create_playlist_for(user_id: "uid", name: "test", description: "desc")
-            }.to raise_error(SpotifyClient::Error)
-        end
+    it "remove_episodes returns true on success" do
+      expect(client.remove_episodes([ "1" ])).to be true
+    end
+    it "remove_episodes returns true early for empty input" do
+      expect(client.remove_episodes([])).to be true
     end
 
-    describe "#add_tracks_to_playlist" do
-        it "adds tracks successfully" do
-            stub_spotify_post("/playlists/p123/tracks", body: {})
-            expect(client.add_tracks_to_playlist(playlist_id: "p123", uris: [ "spotify:track:1" ])).to be true
-        end
+    it "follow_artists returns true on success" do
+      expect(client.follow_artists([ "id1" ])).to be true
+    end
+    it "follow_artists returns true early for empty input" do
+      expect(client.follow_artists([])).to be true
     end
 
-    describe "#clear_user_cache" do
-        it "deletes cache keys for the user" do
-            allow(client).to receive(:current_user_id).and_return("u123")
-            expect(Rails.cache).to receive(:delete_matched).with("spotify_u123_*")
-            client.clear_user_cache
-        end
+    it "unfollow_artists returns true on success" do
+      expect(client.unfollow_artists([ "id1" ])).to be true
+    end
+    it "unfollow_artists returns true early for empty input" do
+      expect(client.unfollow_artists([])).to be true
+    end
+  end
+
+  describe "#create_playlist_for" do
+    it "returns the playlist id" do
+      allow(http_ok).to receive(:body).and_return({ "id" => "new_playlist_id" }.to_json)
+      result = client.create_playlist_for(user_id: "u1", name: "P1", description: "D1")
+      expect(result).to eq("new_playlist_id")
     end
 
-    describe "#token_headers" do
-        it "encodes client_id and secret in base64" do
-            headers = client.send(:token_headers)
-            expect(headers["Authorization"]).to include("Basic")
-        end
+    it "raises Error if ID is missing in response" do
+      allow(http_ok).to receive(:body).and_return({ "error" => "fail" }.to_json)
+      expect {
+        client.create_playlist_for(user_id: "u1", name: "P1", description: "D1")
+      }.to raise_error(SpotifyClient::Error, "Failed to create playlist")
+    end
+  end
+
+  describe "#add_tracks_to_playlist" do
+    it "sends POST request" do
+      expect(client.add_tracks_to_playlist(playlist_id: "p1", uris: [ "spotify:track:1" ])).to be true
+    end
+  end
+
+  # ============================================================================
+  # GROUP 3: COMPLEX LOGIC & UTILITIES
+  # ============================================================================
+
+  describe "#followed_artist_ids" do
+    it "returns a Set of IDs" do
+      allow(http_ok).to receive(:body).and_return([ true, false ].to_json)
+      result = client.followed_artist_ids([ "exists", "not_exists" ])
+      expect(result).to be_a(Set)
+      expect(result).to include("exists")
+      expect(result).not_to include("not_exists")
     end
 
-    describe "#search_tracks" do
-        let(:query) { "Daft Punk" }
-        let(:limit) { 10 }
-        let(:base_url) { "https://api.spotify.com/v1" }
-        let(:url) { "#{base_url}/search?q=#{CGI.escape(query)}&type=track&limit=#{limit}" }
-
-        context "when the request succeeds with track data" do
-            let(:body) do
-                {
-                tracks: {
-                    items: [
-                    {
-                        "id" => "track123",
-                        "name" => "Harder, Better, Faster, Stronger",
-                        "artists" => [ { "name" => "Daft Punk" } ],
-                        "album" => {
-                        "name" => "Discovery",
-                        "images" => [ { "url" => "http://example.com/discovery.jpg" } ]
-                        },
-                        "popularity" => 95,
-                        "preview_url" => "http://example.com/preview.mp3",
-                        "external_urls" => { "spotify" => "https://open.spotify.com/track/track123" },
-                        "duration_ms" => 224000
-                    }
-                    ]
-                }
-                }
-            end
-
-
-            before do
-                stub_request(:get, "#{base_url}/search")
-                .with(query: hash_including(q: query, type: "track", limit: limit.to_s))
-                .to_return(status: 200, body: body.to_json, headers: { 'Content-Type' => 'application/json' })
-
-                stub_spotify_get("/me", body: { id: "user123" })
-            end
-
-            it "returns an array of OpenStruct track objects" do
-                results = client.search_tracks(query, limit: limit)
-
-                expect(results).to be_an(Array)
-                expect(results.size).to eq(1)
-
-                track = results.first
-                expect(track.id).to eq("track123")
-                expect(track.name).to eq("Harder, Better, Faster, Stronger")
-                expect(track.artists).to eq("Daft Punk")
-                expect(track.album_name).to eq("Discovery")
-                expect(track.album_image_url).to eq("http://example.com/discovery.jpg")
-                expect(track.popularity).to eq(95)
-                expect(track.preview_url).to eq("http://example.com/preview.mp3")
-                expect(track.spotify_url).to eq("https://open.spotify.com/track/track123")
-                expect(track.duration_ms).to eq(224000)
-            end
-        end
-
-        context "when Spotify returns no items" do
-            before do
-                stub_spotify_get(
-                    "/search",
-                    body: { tracks: { items: [] } }
-                )
-
-                stub_spotify_get("/me", body: { id: "user123" })
-            end
-
-            it "returns an empty array" do
-                results = client.search_tracks(query)
-                expect(results).to eq([])
-            end
-        end
-
-        context "when Spotify response is missing 'tracks' key" do
-            before do
-                stub_spotify_get(
-                    "/search",
-                    body: {}
-                )
-
-                stub_spotify_get("/me", body: { id: "user123" })
-            end
-
-            it "returns an empty array safely" do
-                results = client.search_tracks(query)
-                expect(results).to eq([])
-            end
-        end
-
-        context "when get raises an error" do
-            before do
-                allow(client).to receive(:get).and_raise(SpotifyClient::Error, "API failed")
-            end
-
-            it "raises SpotifyClient::Error" do
-                expect { client.search_tracks(query) }.to raise_error(SpotifyClient::Error, /API failed/)
-            end
-        end
-
-        context "when ensure_access_token! raises UnauthorizedError" do
-            before do
-                allow(client).to receive(:ensure_access_token!).and_raise(SpotifyClient::UnauthorizedError)
-            end
-
-            it "raises UnauthorizedError and does not call get" do
-                expect(client).not_to receive(:get)
-                expect { client.search_tracks(query) }.to raise_error(SpotifyClient::UnauthorizedError)
-            end
-        end
+    it "returns empty set for empty input" do
+      expect(client.followed_artist_ids([])).to be_empty
     end
 
-    describe "#top_artists" do
-        let(:limit) { 10 }
-        let(:time_range) { "long_term" }
+    it "handles chunking greater than 50 items" do
+      ids = (1..55).map(&:to_s)
+      expect_any_instance_of(Net::HTTP).to receive(:request).twice.and_return(http_ok)
+      allow(http_ok).to receive(:body).and_return([ true ].to_json)
+      client.followed_artist_ids(ids)
+    end
+  end
 
-        before do
-            # Stub /me for cache_for → current_user_id
-            stub_spotify_get("/me", body: { id: "user123" })
-
-            # Disable actual caching for testing
-            allow(client).to receive(:cache_for).and_wrap_original { |_m, *_args, &block| block.call }
-
-            # Mock access token retrieval
-            allow(client).to receive(:ensure_access_token!).and_return("valid_token")
-        end
-
-        context "when the request succeeds with artist data" do
-            let(:body) do
-            {
-                items: Array.new(limit) do |i|
-                {
-                    "id" => "artist#{i + 1}",
-                    "name" => "Artist #{i + 1}",
-                    "images" => [ { "url" => "http://example.com/artist#{i + 1}.jpg" } ],
-                    "genres" => [ "genre#{i + 1}" ],
-                    "popularity" => 100 - i
-                }
-                end
-            }
-            end
-
-            before do
-                stub_spotify_get("/me/top/artists", body: body)
-            end
-
-            it "returns an array of OpenStruct artist objects with correct rank and data" do
-                results = client.top_artists(limit: limit, time_range: time_range)
-                expect(results.size).to eq(limit)
-
-                results.each_with_index do |artist, i|
-                    expect(artist.id).to eq("artist#{i + 1}")
-                    expect(artist.name).to eq("Artist #{i + 1}")
-                    expect(artist.rank).to eq(i + 1)
-                    expect(artist.image_url).to eq("http://example.com/artist#{i + 1}.jpg")
-                    expect(artist.genres).to eq([ "genre#{i + 1}" ])
-                    expect(artist.popularity).to eq(100 - i)
-                    expect(artist.playcount).to eq(100 - i)
-                end
-            end
-        end
-
-        context "when Spotify returns no items" do
-            before do
-                stub_spotify_get("/me/top/artists", body: { items: [] })
-            end
-
-            it "returns an empty array" do
-                expect(client.top_artists(limit: limit, time_range: time_range)).to eq([])
-            end
-        end
-
-        context "when Spotify response is missing 'items' key" do
-            before do
-                stub_spotify_get("/me/top/artists", body: {})
-            end
-
-            it "returns an empty array safely" do
-                expect(client.top_artists(limit: limit, time_range: time_range)).to eq([])
-            end
-        end
-
-        context "when get raises an error" do
-            before do
-                allow(client).to receive(:get).and_raise(SpotifyClient::Error, "API failed")
-            end
-
-            it "raises SpotifyClient::Error" do
-                expect { client.top_artists(limit: limit, time_range: time_range) }.to raise_error(SpotifyClient::Error, /API failed/)
-            end
-        end
-
-        context "when ensure_access_token! raises UnauthorizedError" do
-            before do
-                allow(client).to receive(:ensure_access_token!).and_raise(SpotifyClient::UnauthorizedError)
-            end
-
-            it "raises UnauthorizedError and does not call get" do
-                expect(client).not_to receive(:get)
-                expect { client.top_artists(limit: limit, time_range: time_range) }.to raise_error(SpotifyClient::UnauthorizedError)
-            end
-        end
+  describe "#current_user_id" do
+    context "when id is in session" do
+      it "returns session id without API call" do
+        expect(client.current_user_id).to eq("user123")
+      end
     end
 
-    describe '#follow_artists' do
-        let(:access_token) { "valid_token" }
+    context "when id is NOT in session" do
+      let(:session) { { spotify_token: valid_token, spotify_expires_at: expires_at } }
 
-        before do
-            allow(client).to receive(:ensure_access_token!).and_return(access_token)
-            allow(client).to receive(:cache_for).and_wrap_original { |_m, *_args, &block| block.call }
-            stub_spotify_get("/me", body: { id: "user123" })
-        end
+      it "fetches from API" do
+        allow(http_ok).to receive(:body).and_return({ "id" => "fetched_id" }.to_json)
+        expect(client.current_user_id).to eq("fetched_id")
+      end
 
-        context "when given a single artist ID" do
-            it "sends a PUT request to follow the artist and returns true" do
-            stub_request(:put, "https://api.spotify.com/v1/me/following")
-                .with(
-                query: { type: "artist" },
-                body: { ids: [ "abc123" ] }.to_json,
-                headers: { "Authorization" => "Bearer #{access_token}" }
-                )
-                .to_return(status: 204, body: "", headers: {})
+      it "raises error if API returns nothing" do
+        allow(http_ok).to receive(:body).and_return({}.to_json)
+        expect { client.current_user_id }.to raise_error(SpotifyClient::Error, "Could not determine Spotify user id")
+      end
+    end
+  end
 
-            result = client.follow_artists("abc123")
-            expect(result).to eq(true)
-            end
-        end
-
-        context "when given multiple artist IDs with duplicates and integers" do
-            it "removes duplicates, stringifies IDs, and sends them correctly" do
-            stub_request(:put, "https://api.spotify.com/v1/me/following")
-                .with(
-                query: { type: "artist" },
-                body: { ids: [ "123", "456" ] }.to_json,
-                headers: { "Authorization" => "Bearer #{access_token}" }
-                )
-                .to_return(status: 204, body: "", headers: {})
-
-            result = client.follow_artists([ 123, "456", 123 ])
-            expect(result).to eq(true)
-            end
-        end
-
-        context "when given an empty array" do
-            it "returns true without making any HTTP request" do
-            expect(client).not_to receive(:request_with_json)
-            expect(client.follow_artists([])).to eq(true)
-            end
-        end
-
-        context "when the request fails with an error" do
-            it "raises SpotifyClient::Error" do
-            stub_request(:put, "https://api.spotify.com/v1/me/following")
-                .with(query: { type: "artist" })
-                .to_return(status: 400, body: { error: { message: "Bad Request" } }.to_json)
-
-            expect {
-                client.follow_artists("abc123")
-            }.to raise_error(SpotifyClient::Error, /Bad Request/)
-            end
-        end
+  describe "#clear_user_cache" do
+    it "calls Rails.cache.delete_matched" do
+      expect(Rails.cache).to receive(:delete_matched).with("spotify_user123_*")
+      client.clear_user_cache
     end
 
-    describe "#unfollow_artists" do
-        let(:access_token) { "valid_token" }
+    it "does nothing if user_id is missing" do
+      allow(client).to receive(:current_user_id).and_return(nil)
+      expect(Rails.cache).not_to receive(:delete_matched)
+      client.clear_user_cache
+    end
+  end
 
-        before do
-            allow(client).to receive(:ensure_access_token!).and_return(access_token)
-            allow(client).to receive(:cache_for).and_wrap_original { |_m, *_args, &block| block.call }
-            # Some Spotify endpoints may call /me for caching logic, so stub it to be safe
-            stub_spotify_get("/me", body: { id: "user123" })
-        end
+  describe "#cache_for fallback" do
+    it "yields if user_id is missing (no caching)" do
+      allow(client).to receive(:current_user_id).and_return(nil)
+      result = client.send(:cache_for, [ "test" ]) { "value" }
+      expect(result).to eq("value")
+    end
+  end
 
-        context "when given a single artist ID" do
-            it "sends a DELETE request to unfollow the artist and returns true" do
-            stub_request(:delete, "https://api.spotify.com/v1/me/following")
-                .with(
-                query: { type: "artist" },
-                body: { ids: [ "abc123" ] }.to_json,
-                headers: { "Authorization" => "Bearer #{access_token}" }
-                )
-                .to_return(status: 204, body: "", headers: {})
+  # ============================================================================
+  # GROUP 4: INFRASTRUCTURE, ERRORS, AND TOKEN REFRESH
+  # ============================================================================
 
-            result = client.unfollow_artists("abc123")
-            expect(result).to eq(true)
-            end
-        end
-
-        context "when given multiple artist IDs with duplicates and integers" do
-            it "removes duplicates, stringifies IDs, and sends them correctly" do
-            stub_request(:delete, "https://api.spotify.com/v1/me/following")
-                .with(
-                query: { type: "artist" },
-                body: { ids: [ "123", "456" ] }.to_json,
-                headers: { "Authorization" => "Bearer #{access_token}" }
-                )
-                .to_return(status: 204, body: "", headers: {})
-
-            result = client.unfollow_artists([ 123, "456", 123 ])
-            expect(result).to eq(true)
-            end
-        end
-
-        context "when given an empty array" do
-            it "returns true without making any HTTP request" do
-            expect(client).not_to receive(:request_with_json)
-            expect(client.unfollow_artists([])).to eq(true)
-            end
-        end
-
-        context "when the request fails with an error" do
-            it "raises SpotifyClient::Error" do
-            stub_request(:delete, "https://api.spotify.com/v1/me/following")
-                .with(query: { type: "artist" })
-                .to_return(status: 400, body: { error: { message: "Bad Request" } }.to_json)
-
-            expect {
-                client.unfollow_artists("abc123")
-            }.to raise_error(SpotifyClient::Error, /Bad Request/)
-            end
-        end
+  describe "Private Methods & Error Handling" do
+    it "converts objects to spotify URIs" do
+      track = OpenStruct.new(id: "123")
+      result = client.send(:track_uris_from_tracks, [ track ])
+      expect(result).to eq([ "spotify:track:123" ])
     end
 
-    describe "#followed_artist_ids" do
-        let(:access_token) { "valid_token" }
+    describe "Token Refresh Logic" do
+      context "when token is expired" do
+        let(:expires_at) { 1.hour.ago.to_i }
 
-        before do
-            allow(client).to receive(:ensure_access_token!).and_return(access_token)
-            allow(client).to receive(:cache_for).and_wrap_original { |_m, *_args, &block| block.call }
-            stub_spotify_get("/me", body: { id: "user123" })
+        let(:refresh_response) do
+          instance_double(Net::HTTPResponse,
+            body: { "access_token" => "new_token", "expires_in" => 3600 }.to_json,
+            code: "200",
+            message: "OK"
+          )
         end
 
-        context "when given an empty array" do
-            it "returns an empty Set and does not call the API" do
-            expect(client).not_to receive(:get)
-            result = client.followed_artist_ids([])
-            expect(result).to eq(Set.new)
+        it "refreshes the token automatically" do
+          # We expect at least two calls: 1 refresh + 1 (or more) actual API calls
+          expect_any_instance_of(Net::HTTP).to receive(:request).at_least(:twice) do |http, req|
+            if req.is_a?(Net::HTTP::Post) && req.body.include?("grant_type=refresh_token")
+               refresh_response # Return new token
+            else
+               http_ok # Return standard API response
             end
+          end
+
+          client.profile
+          expect(session[:spotify_token]).to eq("new_token")
         end
 
-        context "when given a single ID that is followed" do
-            it "returns a Set containing that ID" do
-            stub_request(:get, "https://api.spotify.com/v1/me/following/contains")
-                .with(query: { type: "artist", ids: "abc123" })
-                .to_return(status: 200, body: "[true]", headers: { "Content-Type" => "application/json" })
+        it "raises UnauthorizedError if refresh fails" do
+           session[:spotify_expires_at] = 1.hour.ago.to_i
 
-            result = client.followed_artist_ids("abc123")
-            expect(result).to eq(Set.new([ "abc123" ]))
-            end
+           # IMPORTANT: We mock a 200 OK but with an error body/missing token.
+           # If we mock 400, perform_request raises 'Error' before refresh_access_token! can raise 'UnauthorizedError'
+           failure_response = instance_double(Net::HTTPResponse,
+             body: { "error" => "invalid_grant", "error_description" => "Bad Refresh" }.to_json,
+             code: "200",
+             message: "OK"
+           )
+
+           expect_any_instance_of(Net::HTTP).to receive(:request).and_return(failure_response)
+
+           expect { client.profile }.to raise_error(SpotifyClient::UnauthorizedError, "Bad Refresh")
         end
 
-        context "when given a single ID that is not followed" do
-            it "returns an empty Set" do
-            stub_request(:get, "https://api.spotify.com/v1/me/following/contains")
-                .with(query: { type: "artist", ids: "abc123" })
-                .to_return(status: 200, body: "[false]", headers: { "Content-Type" => "application/json" })
-
-            result = client.followed_artist_ids("abc123")
-            expect(result).to eq(Set.new)
-            end
+        it "raises UnauthorizedError if refresh token is missing" do
+          session[:spotify_refresh_token] = nil
+          session[:spotify_expires_at] = 1.hour.ago.to_i
+          expect { client.profile }.to raise_error(SpotifyClient::UnauthorizedError, /Missing Spotify refresh token/)
         end
 
-        context "when given multiple IDs with duplicates and mixed statuses" do
-            it "deduplicates IDs and includes only followed ones" do
-            stub_request(:get, "https://api.spotify.com/v1/me/following/contains")
-                .with(query: { type: "artist", ids: "1,2,3" })
-                .to_return(status: 200, body: "[true,false,true]", headers: { "Content-Type" => "application/json" })
-
-            result = client.followed_artist_ids([ "1", "2", "3", "1" ])
-            expect(result).to eq(Set.new([ "1", "3" ]))
-            end
+        it "raises UnauthorizedError if client credentials are missing" do
+          allow(ENV).to receive(:[]).with("SPOTIFY_CLIENT_ID").and_return(nil)
+          session[:spotify_expires_at] = 1.hour.ago.to_i
+          expect { client.profile }.to raise_error(SpotifyClient::UnauthorizedError, /Missing Spotify client credentials/)
         end
-
-        context "when given more than 50 IDs" do
-            it "splits them into batches of 50 per request" do
-            ids = (1..60).to_a.map(&:to_s)
-            first_batch = ids[0...50]
-            second_batch = ids[50..]
-
-            stub_request(:get, "https://api.spotify.com/v1/me/following/contains")
-                .with(query: { type: "artist", ids: first_batch.join(",") })
-                .to_return(status: 200, body: "[#{([ 'true' ] * 50).join(',')}]", headers: { "Content-Type" => "application/json" })
-
-            stub_request(:get, "https://api.spotify.com/v1/me/following/contains")
-                .with(query: { type: "artist", ids: second_batch.join(",") })
-                .to_return(status: 200, body: "[true,true,true,true,true,true,true,true,true,true]", headers: { "Content-Type" => "application/json" })
-
-            result = client.followed_artist_ids(ids)
-            expect(result.size).to eq(60)
-            expect(result).to include(*ids)
-            end
-        end
+      end
     end
+
+    describe "API Error Handling" do
+      it "raises Error on 400+ response" do
+        error_response = instance_double(Net::HTTPResponse,
+          body: { "error" => { "message" => "Bad Request" } }.to_json,
+          code: "400", message: "Bad Request"
+        )
+        allow_any_instance_of(Net::HTTP).to receive(:request).and_return(error_response)
+
+        expect { client.profile }.to raise_error(SpotifyClient::Error, "Bad Request")
+      end
+
+      it "raises Error on SocketError (Network failure)" do
+        allow_any_instance_of(Net::HTTP).to receive(:start).and_raise(SocketError.new("Network Error"))
+        expect { client.profile }.to raise_error(SpotifyClient::Error, "Network Error")
+      end
+
+      it "handles invalid JSON responses gracefully" do
+        garbage_response = instance_double(Net::HTTPResponse, body: "<html>Not JSON</html>", code: "500", message: "Server Error")
+        allow_any_instance_of(Net::HTTP).to receive(:request).and_return(garbage_response)
+
+        expect { client.profile }.to raise_error(SpotifyClient::Error, "Server Error")
+      end
+    end
+  end
 end

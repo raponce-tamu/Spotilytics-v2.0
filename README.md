@@ -91,7 +91,7 @@ To access user data, you must register the app with Spotify:
     3. https://spotilytics-app-41dbe947e18e.herokuapp.com/auth/spotify/callback
 5. In User Management add your Name and Spotify mail ID
 6. Click Save
-
+ 
 --- 
 
 ### 5️⃣ Environment Configuration

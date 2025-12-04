@@ -44,6 +44,10 @@ Given("Spotify returns recommendation data") do
 
   allow(recommendations_mock).to receive(:search_tracks)
     .and_return(build_recommendations(6))
+
+  # Allow playlist creation calls made from the recommendations flow
+  allow(recommendations_mock).to receive(:create_playlist_for).and_return("playlist_123")
+  allow(recommendations_mock).to receive(:add_tracks_to_playlist).and_return(true)
 end
 
 Given("Spotify top APIs raise unauthorized for recommendations") do

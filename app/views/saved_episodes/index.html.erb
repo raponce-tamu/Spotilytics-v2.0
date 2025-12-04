@@ -1,0 +1,102 @@
+<main class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="text-light">Saved Episodes</h1>
+    <div class="d-flex gap-2">
+      <%= link_to bulk_recommendations_saved_episodes_path, class: "btn btn-outline-light rounded-pill px-4 fw-bold d-flex align-items-center gap-2" do %>
+        <i class="bi bi-stars"></i> AI Recommendations
+      <% end %>
+      <%= link_to search_saved_episodes_path, class: "btn btn-spotify rounded-pill px-4 fw-bold d-flex align-items-center gap-2" do %>
+        <i class="bi bi-search"></i> Find New Episodes
+      <% end %>
+    </div>
+  </div>
+
+  <% if @error %>
+    <div class="alert alert-danger"><%= @error %></div>
+  <% end %>
+
+  <div class="mb-3 d-flex justify-content-end">
+    <% if params[:group_by] == "show" %>
+      <%= link_to saved_episodes_path(page: @page), class: "btn btn-outline-light rounded-pill px-3 d-flex align-items-center gap-2" do %>
+        <i class="bi bi-grid"></i> Ungroup
+      <% end %>
+    <% else %>
+      <%= link_to saved_episodes_path(page: @page, group_by: "show"), class: "btn btn-outline-light rounded-pill px-3 d-flex align-items-center gap-2" do %>
+        <i class="bi bi-collection"></i> Group by Show
+      <% end %>
+    <% end %>
+  </div>
+
+  <% if @episodes.empty? && !@error %>
+    <div class="text-center text-white py-5">
+      <p class="fs-4">You haven't saved any episodes yet.</p>
+      <p class="text-secondary">Search for episodes to add them to your library.</p>
+    </div>
+  <% else %>
+    <% if @grouped_episodes %>
+      <% @grouped_episodes.each do |show_name, episodes| %>
+        <h3 class="text-white mt-4 mb-3 border-bottom border-secondary pb-2"><%= show_name %></h3>
+        <div class="list-group mb-3">
+          <% episodes.each do |episode| %>
+            <%= render partial: "episode_item", locals: { episode: episode } %>
+          <% end %>
+        </div>
+      <% end %>
+    <% else %>
+      <div class="list-group mb-5">
+        <% @episodes.each do |episode| %>
+          <%= render partial: "episode_item", locals: { episode: episode } %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% unless params[:group_by] == "show" %>
+      <div class="d-flex justify-content-center align-items-center gap-3 mb-5 mt-4">
+        <% if @page > 1 %>
+          <%= link_to "Previous", saved_episodes_path(page: @page - 1, group_by: params[:group_by]), class: "btn btn-outline-light" %>
+        <% else %>
+          <button class="btn btn-outline-secondary" disabled>Previous</button>
+        <% end %>
+
+        <span class="text-white">Page <%= @page %> of <%= @total_pages > 0 ? @total_pages : 1 %></span>
+
+        <% if @page < @total_pages %>
+          <%= link_to "Next", saved_episodes_path(page: @page + 1, group_by: params[:group_by]), class: "btn btn-outline-light" %>
+        <% else %>
+          <button class="btn btn-outline-secondary" disabled>Next</button>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+</div>
+
+<style>
+  .spotify-list-hover {
+    transition: background-color 0.2s ease;
+  }
+  .spotify-list-hover:hover {
+    background-color: #2a2a2a !important;
+  }
+  .btn-spotify {
+    background-color: #1DB954;
+    color: white;
+    border: none;
+    font-weight: 700;
+    border-radius: 500px;
+    padding: 12px 32px;
+    transition: transform 0.1s ease, background-color 0.1s ease;
+  }
+  .btn-spotify:hover {
+    background-color: #1ed760;
+    transform: scale(1.04);
+    color: white;
+  }
+  .btn-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+</style>

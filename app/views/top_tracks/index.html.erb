@@ -182,7 +182,12 @@
                                   track.spotify_url,
                                   target: "_blank",
                                   rel: "noopener",
-                                  class: "btn btn-outline-primary btn-sm" %>
+                                  class: "btn btn-outline-primary btn-sm me-2" %>
+                      <%= button_to "Hide from Dashboard",
+                                    hide_top_track_path,
+                                    params: { track_id: track.id, time_range: 'short_term' },
+                                    method: :post,
+                                    class: "btn btn-outline-danger btn-sm" %>
                     <% else %>
                       <span class="text-muted small">No preview</span>
                     <% end %>
@@ -238,7 +243,12 @@
                                   track.spotify_url,
                                   target: "_blank",
                                   rel: "noopener",
-                                  class: "btn btn-outline-primary btn-sm" %>
+                                  class: "btn btn-outline-primary btn-sm me-2" %>
+                      <%= button_to "Hide from Dashboard",
+                                    hide_top_track_path,
+                                    params: { track_id: track.id, time_range: 'medium_term' },
+                                    method: :post,
+                                    class: "btn btn-outline-danger btn-sm" %>
                     <% else %>
                       <span class="text-muted small">No preview</span>
                     <% end %>
@@ -294,7 +304,12 @@
                                   track.spotify_url,
                                   target: "_blank",
                                   rel: "noopener",
-                                  class: "btn btn-outline-primary btn-sm" %>
+                                  class: "btn btn-outline-primary btn-sm me-2" %>
+                      <%= button_to "Hide from Dashboard",
+                                    hide_top_track_path,
+                                    params: { track_id: track.id, time_range: 'long_term' },
+                                    method: :post,
+                                    class: "btn btn-outline-danger btn-sm" %>
                     <% else %>
                       <span class="text-muted small">No preview</span>
                     <% end %>
@@ -333,6 +348,66 @@
                         class: "btn btn-spotify btn-sm" %>
         </div>
       </div>
+
+      <%# ===================== %>
+      <%# Hidden tracks section  %>
+      <%# ===================== %>
+      <% if (@hidden_short.present? && @hidden_short.any?) || (@hidden_medium.present? && @hidden_medium.any?) || (@hidden_long.present? && @hidden_long.any?) %>
+        <hr class="my-3" />
+        <h3 class="text-light">Hidden tracks</h3>
+        <p class="text-secondary small">These tracks are hidden from your top lists — you can restore them below.</p>
+
+        <div class="row tracks-grid-row">
+          <% ranges = [
+            { key: 'short_term',  label: 'Last 4 Weeks',  tracks: @hidden_short || [] },
+            { key: 'medium_term', label: 'Last 6 Months', tracks: @hidden_medium || [] },
+            { key: 'long_term',   label: 'Last 1 Year',   tracks: @hidden_long || [] }
+          ] %>
+
+          <% ranges.each do |range| %>
+            <div class="col-12 col-lg-4 tracks-col">
+              <div class="time-header-col mb-2"><strong><%= range[:label] %></strong></div>
+              <% if range[:tracks].any? %>
+                <% range[:tracks].each do |track| %>
+                  <div class="track-lineup mb-2">
+                    <div class="text-center">
+                      <% if track.album_image_url.present? %>
+                        <div class="mt-2">
+                          <%= image_tag track.album_image_url,
+                                        alt: track.album_name,
+                                        class: 'rounded border',
+                                        size: "48x48" %>
+                        </div>
+                      <% end %>
+                    </div>
+
+                    <div class="track-details flex-grow-1">
+                      <div class="text-light">
+                        <% if track.spotify_url.present? %>
+                          <%= link_to track.name, track.spotify_url, target: "_blank", rel: "noopener", class: "track-name-link text-light" %>
+                        <% else %>
+                          <span class="text-light"><%= track.name %></span>
+                        <% end %>
+                      </div>
+                      <div class="track-secondary"><%= track.artists %></div>
+
+                      <div class="mt-2">
+                        <%= button_to "Unhide",
+                                      unhide_top_track_path,
+                                      params: { track_id: track.id, time_range: range[:key] },
+                                      method: :post,
+                                      class: "btn btn-outline-success btn-sm" %>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              <% else %>
+                <div class="text-muted small">No hidden tracks</div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
 
     <% else %>
       <p class="text-secondary">
