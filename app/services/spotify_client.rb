@@ -515,22 +515,8 @@ class SpotifyClient
     response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
       http.open_timeout = 5
       http.read_timeout = 5
-      http.ca_file = ENV["SSL_CERT_FILE"]
       http.request(request)
     end
-    #     http = Net::HTTP.new(uri.host, uri.port)
-    # http.use_ssl = (uri.scheme == "https")
-    # http.open_timeout = 5
-    # http.read_timeout = 5
-
-    # if ENV["SSL_CERT_FILE"].present?
-    #   http.ca_file = ENV["SSL_CERT_FILE"]
-    #   http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-    # else
-    #   http.verify_mode = OpenSSL::SSL::VERIFY_NONE #
-    # end
-
-    # response = http.request(request)
 
     body = parse_json(response.body)
 
