@@ -3,7 +3,7 @@
 Given("the AI will optimize the search query") do
   # Mock OpenAI service to return optimized query
   allow_any_instance_of(OpenaiService).to receive(:generate_search_query).and_return("optimized query")
-  
+
   # Stub the search for the optimized query
   # We stub both show and episode search structures to cover both cases
   stub_request(:any, /search/)
@@ -68,9 +68,9 @@ When("I click the recommendation button {string} for the first show") do |button
   if button_text == "Why?"
     allow_any_instance_of(OpenaiService).to receive(:generate_recommendation).and_return("Because you like it.")
   elsif button_text == "Similar"
-    allow_any_instance_of(OpenaiService).to receive(:suggest_similar_shows).and_return(["Similar Show 1"])
+    allow_any_instance_of(OpenaiService).to receive(:suggest_similar_shows).and_return([ "Similar Show 1" ])
     stub_request(:get, /https:\/\/api\.spotify\.com\/v1\/search/)
-      .to_return(status: 200, body: { shows: { items: [{ id: "sim_1", name: "Similar Show 1", publisher: "Pub", images: [], external_urls: { spotify: "url" }, total_episodes: 10 }], total: 1 } }.to_json)
+      .to_return(status: 200, body: { shows: { items: [ { id: "sim_1", name: "Similar Show 1", publisher: "Pub", images: [], external_urls: { spotify: "url" }, total_episodes: 10 } ], total: 1 } }.to_json)
   end
 
   click_button button_text

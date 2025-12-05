@@ -46,8 +46,8 @@ end
 
 When("I click the bulk recommendations link") do
   # Stub OpenAI for bulk recommendations
-  allow_any_instance_of(OpenaiService).to receive(:generate_bulk_recommendations).and_return(["Bulk Rec 1"])
-  
+  allow_any_instance_of(OpenaiService).to receive(:generate_bulk_recommendations).and_return([ "Bulk Rec 1" ])
+
   # Stub search for bulk rec
   stub_request(:get, /search/)
     .to_return(status: 200, body: {
