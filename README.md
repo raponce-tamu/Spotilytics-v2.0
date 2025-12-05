@@ -9,9 +9,9 @@ Spotilytics v2.0 is a Ruby on Rails web application that uses Spotify OAuth 2.0 
 - **Heroku Dashboard:** [https://spotilytics-version2-c80381d23acb.herokuapp.com/home](https://spotilytics-version2-c80381d23acb.herokuapp.com/home)
 - **GitHub Projects Dashboard:** [https://github.com/orgs/tamu-edu-students/projects/176](https://github.com/orgs/tamu-edu-students/projects/176)
 - **Burn up chart** [https://github.com/orgs/tamu-edu-students/projects/154/insights](https://github.com/orgs/tamu-edu-students/projects/154/insights)
-- **Slack Group** (to track Scrum Events) - #csce606-proj2-group1 - [https://tamu.slack.com/archives/C09RYTFDDFX](https://tamu.slack.com/archives/C09RYTFDDFX)
+- **Slack Group** (to track Scrum Events) - #606-project3-team1 - [https://tamu.slack.com/archives/C09RYTFDDFX](https://tamu.slack.com/archives/C09RYTFDDFX)
 - **Spotify Developer Dashboard:** [https://developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-- **User Stories List:** [https://docs.google.com/spreadsheets/d/1Yk2f3Z4bX1vJH3F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0/edit#gid=0](https://docs.google.com/spreadsheets/d/1Yk2f3Z4bX1vJH3F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0/edit#gid=0)
+- **User Stories List:** [https://docs.google.com/document/d/1jVv2fd3zgR0hf0M2sIa5QTSD2Ow-P9SO1jITTCoR7os/edit?pli=1&tab=t.0](https://docs.google.com/document/d/1jVv2fd3zgR0hf0M2sIa5QTSD2Ow-P9SO1jITTCoR7os/edit?pli=1&tab=t.0)
 
 
 ## New Features in Spotilytics v2.0
@@ -289,7 +289,19 @@ Spotilytics lets you view your listening history, top artists, top tracks, and g
 
     Your results update automatically when you change the selection.
 
-6. **Top Artists Page**
+6. **Hide / Show Top Tracks**
+
+    You can customize your Top Tracks list by hiding songs you don’t want to see. This will also remove it from your spotilytics dashboard.
+
+    How to Hide a Track:
+    1.	Click the “Hide” button next to any track in your Top Tracks list.
+    2.	The track will be removed from view immediately.
+    3.	To unhide, go to the “Hidden Tracks” section at the bottom of the page.
+    4.	Click “Show” next to any hidden track to restore it to your main list.
+
+    This feature helps you hide songs that you don't think represent your listening taste accurately.
+
+7. **Top Artists Page**
 
     The Top Artists page provides detailed insights into your most-played artists.
 
@@ -325,6 +337,19 @@ Spotilytics lets you view your listening history, top artists, top tracks, and g
         - Named like “Your Top Tracks – Last 6 Months”
         - Add your top 10 songs automatically
 
+    You can also create a custom playlist by uploading a CSV file or adding songs individually.
+    How to Create a Custom Playlist:
+    1. Navigate to the Playlist Creation tab.
+    2. Choose to either:
+        - Upload a CSV file with song and artist data
+        - Add songs using a csv list
+        - Add songs one by one using the search bar
+    3. Review the generated playlist preview.
+    4. Give your playlist a name and description.
+    5. Make any final adjustments (add/remove songs).
+    6. Click “Save to Spotify” to create the playlist in your account.
+
+
 8. **Recommendations Page**
 
     The Recommendations tab generates personalized music recommendations based on your recent listening history and top artists.
@@ -337,6 +362,17 @@ Spotilytics lets you view your listening history, top artists, top tracks, and g
     - Song or album title
     - Artist name(s)
     - “Open in Spotify” button to play directly.
+
+9. **Podcasts and Saved Shows**
+
+    Spotilytics now integrates your top podcasts and saved shows.
+
+    What You’ll See:
+    - A list of your most-listened-to podcasts.
+    - AI-generated summaries for each podcast episode.
+    - Direct links to open episodes in Spotify.
+    - A section for your saved shows with details and links.
+    - Use AI search to find specific podcasts or episodes quickly.
 
 ---
 
