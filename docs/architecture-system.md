@@ -10,7 +10,7 @@ graph TD
   subgraph Heroku["Heroku Dyno(s)"]
     Rails["Rails App"]
     SClient["SpotifyClient (service)"]
-    Views["ERB Views / Partials"]
+    Views["ERB Views / Partials<br/>Dashboard • Top Artists/Tracks • Library • Recommendations<br/>Saved Shows/Episodes • Playlist Builder/Visibility"]
     RailsCache["Rails.cache API"]
   end
 
@@ -26,6 +26,7 @@ graph TD
   %% Browser <> Rails
   User_Device -->|HTTPS| Rails
   Rails -->|Reads/Writes| Cookie
+  Rails -->|Server-render views| Views
 
   %% OAuth
   Rails -->|OAuth redirect| OAuth
@@ -43,6 +44,9 @@ graph TD
   SClient -. "cache_for([...])\nRails.cache.fetch(key)" .-> RailsCache
   RailsCache -. "hit → return data" .-> SClient
   RailsCache -. "miss → fetch via API\nstore in Redis" .-> SClient
+
+  %% Library / follow / visibility flows refresh immediately
+  Rails -. "Library fetch uses skip_cache after follow/visibility changes\nso button labels (Public/Private, Follow/Unfollow) refresh" .- SClient
 
   %% CI
   subgraph CI["GitHub Actions"]
