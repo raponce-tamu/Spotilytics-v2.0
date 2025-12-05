@@ -360,153 +360,107 @@ Spotilytics lets you view your listening history, top artists, top tracks, and g
 
 # Architecture Decision Records (ADRs)
 
-## ADR 0001 – Use Spotify API as the primary Source (No DB)
+## ADR 001 – Allow Individual Song Addition, Batch Addition and File Upload for Playlist Creation
 **Status:** Accepted
 
 **Context**  
-Spotilytics retrieves real-time Spotify data. Storing a local copy adds complexity and compliance risk without long-term benefit.
+Spotilytics allows users to create custom playlists from their top tracks. We needed to decide how to give users flexibility in adding songs to their playlists.
 
 **Decision**  
-Do not maintain an internal database. Fetch data directly from Spotify APIs and cache short-lived results only.
+They should be able to add individual songs, add multiple songs at once, or upload a CSV file containing song and artist data. A user might have a list of favorite songs they want to include, or they might want to upload a pre-prepared CSV file exported from another source.
 
 **Consequences**  
-- Advantage: Always fresh and consistent data  
-- Downside: Dependent on Spotify API uptime and latency  
-- Downside: Must respect API rate limits
+- Advantage: Flexible user experience  
+- Advantage: Supports various user workflows 
+- Advantage: CSV upload simplifies bulk additions
+- Downside: CSV must be correctly formatted
 
-## ADR 0002 – Authentication via Spotify OAuth
+## ADR 002 – Reuse and Modularize Existing Spotify Client Functionality
 **Status:** Accepted
 
 **Context**  
-Users must log in securely and authorize Spotilytics to access their profile, top tracks and artists.
+Spotilytics v2.0 is being developed as an extension of an earlier Spotilytics application. We wanted to leverage existing code for Spotify API interactions to avoid duplication and ensure consistency. 
 
 **Decision**  
-Implement Spotify OAuth 2.0 using `omniauth` and `rspotify`. Tokens are stored in session only; refresh handled by RSpotify.
+Reuse and modularize the existing Spotify client functionality from the original Spotilytics app. This includes authentication, token management, and API request handling. We will encapsulate this logic in a dedicated service class that can be easily reused across different controllers and views.
 
 **Consequences**  
-- Advantage: Secure, proven flow  
-- Advantage: Spotify-compliant token management  
-- Downside: Relies on RSpotify library abstractions  
-- Downside: Must handle expired sessions gracefully
+- Advantage: Reduces code duplication  
+- Advantage: Easier maintenance and updates
+- Advantage: Faster development time 
 
-## ADR 0003 – Short-Lived Caching in Memory/Session
+## ADR 003 – Query Normalization for Cache Key Generation
 **Status:** Accepted
 
 **Context**  
-Frequent Spotify API calls could slow page loads and hit rate limits.
+Spotilytics caches Spotify API responses (e.g., top tracks, top artists) using composite cache keys that include user ID, query parameters, and time ranges.  
+We observed cache misses for semantically identical queries due to differences in parameter ordering, whitespace, or casing (e.g., `limit=20&time_range=short_term` vs. `time_range=short_term&limit=20`).  
+This led to redundant API calls and inconsistent cache utilization.
+
 
 **Decision**  
-Cache lightweight API responses (e.g. top artists/tracks) in session or memory for minutes; invalidate via “Refresh Data”.
+Normalize query parameters before generating cache keys by:
+- Sorting parameter keys alphabetically
+- Stripping extraneous whitespace
+- Converting values to a canonical format (e.g., downcasing strings)
+- Serializing parameters in a stable, predictable order
 
 **Consequences**  
-- Advantage: Faster user experience  
-- Advantage: Fewer external API calls  
-- Downside: Cache lost on dyno restart  
-- Downside: Potential stale data if not refreshed
-
-## ADR 0004 – Server-Side Playlist Creation
-**Status:** Accepted
-
-**Context**  
-Creating playlists requires user tokens. Executing this client-side would expose credentials.
-
-**Decision**  
-Handle playlist creation entirely server-side within `PlaylistsController#create`.
-
-**Consequences**  
-- Advantage: Secure and auditable  
-- Advantage: Simplifies frontend logic  
-- Downside: Adds load to server-side  
-- Downside: Must throttle to avoid hitting Spotify limits
-
-## ADR 005 – Add “Refresh Data” Action for Live Spotify Sync
-**Status:** Accepted
-
-**Context**  
-Spotilytics visualizes listening data (top tracks, artists, genres and recommendations) directly from Spotify’s Web API and stores it in the cache for several hours.  
-Users often want to see their most recent stats — especially after major playlist updates or new songs played.  
-We needed a lightweight mechanism to force re-fetching from the API without manual cache clearing or session resets.
-
-**Decision**  
-Add a **“Refresh Data”** button in the navigation bar that triggers a refresh of cached Spotify data.  
-When clicked, it clears temporary session-level caches and re-requests data from Spotify APIs for:  
-- Top tracks  
-- Top artists  
-- Recommendations  
-
-**Consequences**  
-- Advantage: Enables real-time Spotify data sync on demand  
-- Advantage: Improves user trust and transparency (“instant refresh”)  
-- Advantage: Avoids the need for background jobs or a persistent DB  
-- Downside: Increases API traffic if users refresh too frequently  
-- Downside: Adds minor latency (API round-trip before page render)
+- Advantage: Eliminates cache misses for equivalent queries with different parameter orderings or formatting
+- Advantage: Improves cache hit rate and reduces unnecessary Spotify API calls
+- Advantage: Simplifies debugging and cache invalidation
+- Downside: Slight overhead in key generation logic
+- Downside: Requires all cache consumers to use the normalization helper for consistency
 
 ---
 
 # Postmortem: 
 
-## Incident 001 – Limited User Data for Inactive Spotify Accounts
+## Incident 001 – Cache Key Collisions Due to Incomplete Query Normalization
 
-Date: 2025-28-10
+Date: 2025-18-11
 Status: Closed
 
 ### Impact
 
-Users with low Spotify activity (e.g. few streams in the past year) saw empty or incomplete data visualizations on the Dashboard and Top Tracks/Artists pages. This led to poor user experience and confusion about whether the app was broken.
+Some users saw incorrect analytics data on their dashboard, with top tracks and artists mismatched between time ranges. This led to confusion and inaccurate recommendations. Showing and Hiding tracks also malfunctioned intermittently.
 
 ### Root Cause
 
-Spotify’s “Top Items” endpoints return limited results when a user’s listening history is insufficient. Spotilytics didn’t account for this edge case in early builds.
+Cache keys were generated using raw query parameters without normalization. When parameters were passed in different orders or with varying whitespace/casing, semantically identical queries produced different cache keys, causing cache misses and, in rare cases, collisions.
+
 
 ### Actions Taken
-- Added empty state UI (“Not enough data yet — start listening and come back!”).
-- Adjusted analytics logic to gracefully render placeholders when fewer than 5 tracks or artists are returned.
+- Implemented query normalization: parameters are now sorted, stripped of whitespace, and downcased before cache key generation.
+- Added unit tests to verify cache key uniqueness and stability for equivalent queries.
+
 
 ### Follow-Up
-- Consider hybrid display using Spotify featured playlists as filler data to enhance UI.
+- Periodically audit cache usage and key generation logic.
+- Document cache key normalization in developer onboarding materials.
 
-## Incident 002 – Follow/Unfollow Rate Limit Exceeded
+## Incident 002 – Unconfigured Routes Caused Application Errors
 
-Date: 2025-02-11
+Date: 2025-01-12
 Status: Closed
 
 ### Impact
 
-Frequent follow/unfollow actions in the Top Artists tab triggered Spotify API’s 429 Too Many Requests rate limit, causing temporary errors and failed interactions.
+When users manually entered or navigated to undefined routes (URLs not mapped in `routes.rb`), the application crashed and displayed a generic Rails error page. This resulted in a poor user experience and confusion, as users expected to be redirected to the dashboard or a helpful page.
+
 
 ### Root Cause
 
-The Spotify Web API enforces per-user and per-app rate limits. The UI allowed rapid toggling of follow state without throttling or batching requests.
+The Rails router did not have a catch-all route to handle undefined paths. Any request to an unconfigured route triggered a routing error, which was not gracefully handled by the application.
+
 
 ### Actions Taken
-- Batched multiple API calls server-side using short async queues.
+- Added a catch-all route at the end of `config/routes.rb` to redirect all undefined paths to the dashboard (`/dashboard`).
+- Verified that navigating to any invalid URL now redirects users to a familiar dashboard view.
 
 ### Follow-Up
-- Evaluate caching artist follow state locally to reduce duplicate calls.
-- Track API usage metrics in logs to identify peak load.
-
-## Incident 003 – Restricted Access in Spotify Developer “Development Mode”
-
-Date: 2025-25-10
-Status: Ongoing (Known Limitation)
-
-### Impact
-
-New users not whitelisted in the Spotify Developer Dashboard couldn’t log in to Spotilytics, receiving “You are not registered for this app” errors.
-This limited testing to a small group of manually added accounts.
-
-### Root Cause
-
-Spotify Developer apps in Development Mode only allow 25 registered testers.
-Upgrading to “Production Mode” requires Spotify approval and organizational verification.
-
-### Actions Taken
-- Documented the testing limitation clearly in README.
-- Added instructions for adding testers via Developer Dashboard.
-
-### Follow-Up
-- Move Spotilytics app to Spotify Verified Org once org-level upgrade is requested from Spotify.
-- Add fallback “Demo Mode” (mock data) for public users to explore app features without Spotify login.
+- Periodically review route configuration after adding new features.
+- Add integration tests to ensure undefined routes are handled gracefully.
 
 ## Incident 004 – Coverage Reports Not Merging in CI
 
@@ -550,6 +504,10 @@ This section provides **useful context for developers** trying to debug issues i
 | Playlist creation failing with “Invalid time range” | Tried re-sending POST requests from UI — no success. | Ensured time_range parameter matches one of the valid keys: short_term, medium_term, long_term. |
 | Recommendations tab returning no results | Verified API keys — still empty. | Confirmed the app had user-top-read and user-read-recently-played scopes enabled in Spotify Developer Dashboard |
 | Top Tracks limits not persisting across columns | Only the changed column updated — others reset to default. | Preserved other range limits via hidden fields (limit_short_term, limit_medium_term, limit_long_term) in the form before submission.|
+| Playlist creation failing with “Invalid time range” | Tried re-sending POST requests from UI — no success. | Ensured time_range parameter matches one of the valid keys: short_term, medium_term, long_term. |
+| Recommendations tab returning no results | Verified API keys — still empty. | Confirmed the app had user-top-read and user-read-recently-played scopes enabled in Spotify Developer Dashboard |
+| Top Tracks limits not persisting across columns | Only the changed column updated — others reset to default. | Preserved other range limits via hidden fields (limit_short_term, limit_medium_term, limit_long_term) in the form before submission.|
+| SSL Certificate Error | Tried updating gems and restarting server — no effect. | Add http.verify_mode = OpenSSL::SSL::VERIFY_NONE in `spotify_client.rb` or add http.ca_file = path pointing to the CA certificates file. |
 
 ---
 
@@ -574,7 +532,7 @@ This section provides **useful context for developers** trying to debug issues i
 # Developed by Team 1 - CSCE 606 (Fall 2025)
 ## Team Members
 - **Pablo Pineda**
-- **Pablo Pineda**
+- **Pradeep Periyasamy**
 - **Vanessa Lobo**
 
 > “Discover Your Sound”
