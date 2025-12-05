@@ -1,9 +1,6 @@
-# 🎧 Spotilytics
+# 🎧 Spotilytics v2.0
 
-Spotilytics is a Ruby on Rails web application that connects to the Spotify Web API to generate an on-demand “Spotify Wrapped” experience.
-Users can log in with their Spotify account to instantly view their Top Tracks, Top Artists and Genre insights, all powered by live Spotify data.
-
-The app uses Spotify OAuth 2.0 authentication via the official Spotify Developer APIs and all data is fetched directly from Spotify in real time.
+Spotilytics v2.0 is a Ruby on Rails web application that uses Spotify OAuth 2.0 (omniauth / rspotify) to authenticate users and fetch live data from the Spotify Web API. It delivers a personalized, on-demand “Spotify Wrapped” experience — Top Tracks and Top Artists across multiple time ranges, interactive genre analytics, personalized recommendations, and follow/unfollow management that syncs directly to the user’s Spotify account. It also allows custom playlist creation from top tracks and CSV imports. It has also been integrated with user's top podcasts and saved shows and provides AI generated summaries and search.
 
 ---
 
@@ -13,45 +10,28 @@ The app uses Spotify OAuth 2.0 authentication via the official Spotify Developer
 - **GitHub Projects Dashboard:** [https://github.com/orgs/tamu-edu-students/projects/176](https://github.com/orgs/tamu-edu-students/projects/176)
 - **Burn up chart** [https://github.com/orgs/tamu-edu-students/projects/154/insights](https://github.com/orgs/tamu-edu-students/projects/154/insights)
 - **Slack Group** (to track Scrum Events) - #csce606-proj2-group1 - [https://tamu.slack.com/archives/C09RYTFDDFX](https://tamu.slack.com/archives/C09RYTFDDFX)
+- **Spotify Developer Dashboard:** [https://developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+- **User Stories List:** [https://docs.google.com/spreadsheets/d/1Yk2f3Z4bX1vJH3F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0/edit#gid=0](https://docs.google.com/spreadsheets/d/1Yk2f3Z4bX1vJH3F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0/edit#gid=0)
 
 
-## Features
-1. Login securely using Spotify OAuth 2.0 authentication and fetch live Spotify data directly via the Spotify Web API
-2. Personalized Dashboard showing:
-    - Top Tracks of the Year
-	- Top Artists of the Year
-	- Top Genres (with interactive pie chart visualization)
-	- Followed Artists list with direct Spotify links
-3. Dynamic Top Tracks display including:
-	- Rank, track name, artist(s), album name, and popularity score
-	- Three time ranges — Last 4 Weeks, Last 6 Months, and Last 1 Year
-	- Options to view Top 10, Top 25, or Top 50 tracks
-	- “Play on Spotify” buttons linking directly to each track
-4. Dynamic Top Artists view including:
-	- Artist images, names, and play counts
-	- Three time ranges — Past 4 Weeks, Past 6 Months, and Past Year
-	- Rank indicators and selectable display limits (Top 10 / 25 / 50)
-5. Artist Follow/Unfollow feature:
-	- View your currently followed artists
-	- Follow or unfollow artists directly within the Top Artists tab
-	- Changes sync instantly with your Spotify account via the API
-6. Genre Analytics:
-	- Auto-generated pie chart summarizing top genres
-	- Visual breakdown of listening distribution (e.g., Pop, Indie, Hip-Hop, etc.)
-	- Groups minor genres under an “Other” category for clarity
-7. Playlist Creation:
-	- Create new Spotify playlists from your top tracks for any time range
-	- Automatically name and describe playlists (e.g., “Your Top Tracks – Last 6 Months”)
-8. Recommendations Tab:
+## New Features in Spotilytics v2.0
+1. Recommendations Tab:
     - Personalized track and album recommendations based on your listening history
-    - Create playlists from recommended songs
-9. Custom Playist Creation:
+    - Create playlists from your recommended songs
+2. Custom Playist Creation:
     - Import your top tracks into a new Spotify playlist with a single click
     - Upload a CSV file of song and artist data to create a playlist
     - Add songs individually or add a list of songs
     - Review the playlist before saving it to your Spotify account
-10. Customize your Dashboard:
+3. Customize your Dashboard:
     - Hide or show specific songs on your Top Tracks list
+    - Hide tracks you don’t want to see on your Spotilytics dashboard
+4. Podcast and Saved Shows Integration:
+    - View your top podcasts and saved shows alongside music data
+    - Get AI-generated summaries of your favorite podcasts
+5. Search Functionality:
+    - Search your top tracks, artists, and podcasts directly within the app
+    - Quickly find specific songs or artists from your listening history
     
 
 ## Getting Started — From Zero to Deployed
@@ -74,8 +54,8 @@ Make sure you have the following installed:
 ### 2️⃣ Clone the Repository
 
 ```bash
-git clone https://github.com/tamu-edu-students/Spotilytics.git
-cd Spotilytics
+git clone https://github.com/tamu-edu-students/Spotilytics-v2.0.git
+cd Spotilytics-v2.0
 ```
 
 ---
@@ -90,19 +70,17 @@ bundle install
 
 ### 4️⃣ Spotify Developer Setup
 
-To access user data, you must register the app with Spotify:
-1.	Go to the Spotify Developer Dashboard.
-2.	Create a new App.
-3.	Copy your:
-	1. Client ID
-	2. Client Secret
+To access your spotify data, you must have a Spotify account and create a Spotify Developer App to get your Client ID and Client Secret.
+1.	Go to the Spotify Developer Dashboard : https://developer.spotify.com/dashboard
+2.	Click on "Create App"
+3.  Fill in the App name and description
 4.	Under Redirect URIs, add:
     1. https://localhost:3000/auth/spotify/callback
     2. http://127.0.0.1:3000/auth/spotify/callback
-    3. https://spotilytics-app-41dbe947e18e.herokuapp.com/auth/spotify/callback
-5. In User Management add your Name and Spotify mail ID
-6. Click Save
- 
+    3. https://spotilytics-version2-c80381d23acb.herokuapp.com/auth/spotify/callback (for production)
+5. Select the "Web API" option.
+6. Accept the terms and Click "Save"
+7. In User Management add your Name and Spotify mail ID. If you need to add more users for testing, add their Spotify mail IDs here as well.
 --- 
 
 ### 5️⃣ Environment Configuration
@@ -112,7 +90,7 @@ Create a .env file in the project root to store your credentials:
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 ```
-Do not to commit .env files to Git
+Do not commit .env files to Git
 
 --- 
 
@@ -122,12 +100,12 @@ Do not to commit .env files to Git
 rails server
 ```
 
-Visit: http://localhost:3000
+Visit: http://127.0.0.1:3000
 
-You can log in using your Spotify mail ID which you added in User Management:
+You can log in using your Spotify mail ID with which you created the app or added in User Management:
 1. Click Log in with Spotify
 2. Approve permissions
-3. You’ll be redirected to the Home Page where you can see different tabs for Dashboard, Top Tracks and Top Artists
+3. You’ll be redirected to the Home Page where you can see different tabs
 
 --- 
 
@@ -161,7 +139,7 @@ open coverage/index.html
 
 ```bash
 heroku login
-heroku create <your-app-name>  # in this case 'heroku create spotilytics'
+heroku create <your-app-name>  # in this case 'heroku create spotilytics-version2'
 ```
 
 #### Step 2: Set GitHub Secrets/ Heroku Secrets
@@ -175,22 +153,29 @@ In **GitHub** → **Settings → Secrets and Variables → Actions**, add the fo
 | `SPOTIFY_CLIENT_ID` | Your Spotify Client ID |
 | `SPOTIFY_CLIENT_SECRET` | Your Spotify Client Secret |
 
-#### To manually deploy using the Heroku CLI if you’re not using GitHub Actions:
+#### Step 3: To manually deploy using the Heroku CLI if you’re not using GitHub Actions:
 ```bash
 git push heroku main
 heroku open
 ```
 
-### 9️⃣ Access the App
+### Step 4: Access the App
 
-Once deployed, visit your live Heroku URL:
-https://spotilytics-demo.herokuapp.com
+Once deployed, visit your live Heroku URL (for example):
+https://spotilytics-version2-demo.herokuapp.com/home
+
+### Step 5: Update user management in Spotify Developer Dashboard to add new users for testing.
+On the Spotify Developer Dashboard, navigate to your app, then go to "User Management" and add the Spotify email IDs of users you want to authorize for testing. These users will then be able to log in to the Spotilytics app using their Spotify accounts.
+
 
 You’ll be able to:
 1. Log in with Spotify
 2. View your top artists and tracks by timeframe
 3. Explore your genre breakdowns
 4. Generate playlists from your top songs
+5. Access recommendations based on your listening history
+6. Create custom playlists or import songs
+7. View your top podcasts and saved shows with AI summaries
 
 ## Useful Commands
 
@@ -198,9 +183,9 @@ You’ll be able to:
 |----------------|------------------|
 | **start server**  | `rails server` |
 | **run rspec tests**    | `bundle exec rspec` |
-| **run single RSpec test**    | `bundle exec rspec spec/models/note_spec.rb` |
+| **run single RSpec test**    | `bundle exec rspec spec/controllers/playlist_controller_spec.rb` |
 | **run cucumber tests**    | `bundle exec cucumber` |
-| **run single Cucumber scenario**    | `bundle exec cucumber features/notes.feature` |
+| **run single Cucumber scenario**    | `bundle exec cucumber features/top_tracks.feature` |
 | **check test coverage**       | `open coverage/index.html` |
 | **check last few lines of error log messages from Heroku**       | `heroku logs` |
 
@@ -214,10 +199,11 @@ Spotilytics lets you view your listening history, top artists, top tracks, and g
 ### Getting Started
 
 1. **Access the App**  
-   Visit your deployed app [https://spotilytics-app-41dbe947e18e.herokuapp.com/](https://spotilytics-app-41dbe947e18e.herokuapp.com/)
+   Visit your deployed app [https://spotilytics-version2-c80381d23acb.herokuapp.com/home](https://spotilytics-version2-c80381d23acb.herokuapp.com/home)
 
    Requirements
 	- A Spotify account (Free or Premium)
+    - Access to the Spotilytics app (added as a tester in the Spotify Developer Dashboard)
 	- Internet connection and a browser
 	- Permission to connect Spotilytics to your Spotify account
 
@@ -587,10 +573,9 @@ This section provides **useful context for developers** trying to debug issues i
 
 # Developed by Team 1 - CSCE 606 (Fall 2025)
 ## Team Members
-- **Aurora Jitrskul**
 - **Pablo Pineda**
-- **Aditya Vellampalli**
-- **Spoorthy Kumbashi Raghavendra**
+- **Pablo Pineda**
+- **Vanessa Lobo**
 
 > “Discover Your Sound”
 
