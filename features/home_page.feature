@@ -10,9 +10,8 @@ Feature: Home Page
     Given I am on the home page
     And I should see "Spotilytics"
     And I should see "Discover Your Sound"
-    And I should see "Aurora Jitrskul"
-    And I should see "Aditya Vellampalli"
-    And I should see "Spoorthy Raghavendra"
+    And I should see "Vanessa Lobo"
+    And I should see "Pradeep Periyasamy"
     And I should see "Pablo Pineda"
 
   Scenario: I want to login from the home page
