@@ -52,10 +52,11 @@ end
 
 Then("I should be redirected to home") do
   driver = page.driver
-  location = if driver.respond_to?(:response) && driver.response.respond_to?(:location)
-               driver.response.location
-             elsif driver.respond_to?(:response_headers)
-               driver.response_headers["Location"]
-             end
+  location =
+    if driver.respond_to?(:response) && driver.response.respond_to?(:location)
+      driver.response.location
+    elsif driver.respond_to?(:response_headers)
+      driver.response_headers["Location"]
+    end
   expect(location || page.current_path).to include(root_path)
 end

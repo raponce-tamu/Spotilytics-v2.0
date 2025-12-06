@@ -8,7 +8,7 @@ Given("pages controller client defaults are stubbed") do
     SpotifyClient,
     clear_user_cache: true,
     profile: { name: "Me" },
-    top_artists: [ OpenStruct.new(id: "a1", genres: ["rock"], name: "Artist" ) ],
+    top_artists: [ OpenStruct.new(id: "a1", genres: [ "rock" ], name: "Artist") ],
     top_tracks: [ OpenStruct.new(id: "t1") ],
     followed_artists: [],
     followed_artist_ids: Set.new,
