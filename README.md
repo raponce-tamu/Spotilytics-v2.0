@@ -88,6 +88,7 @@ Create a .env file in the project root to store your credentials:
 ```bash
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+OPENAI_API_KEY=your_openai_api_key
 ```
 Do not commit .env files to Git
 
@@ -151,6 +152,7 @@ In **GitHub** → **Settings → Secrets and Variables → Actions**, add the fo
 | `HEROKU_APP_NAME` | Your Heroku app name (spotilytics in this case) |
 | `SPOTIFY_CLIENT_ID` | Your Spotify Client ID |
 | `SPOTIFY_CLIENT_SECRET` | Your Spotify Client Secret |
+| `OPENAI_API_KEY` | Your OpenAI API Key |
 
 #### Step 3: To manually deploy using the Heroku CLI if you’re not using GitHub Actions:
 ```bash
