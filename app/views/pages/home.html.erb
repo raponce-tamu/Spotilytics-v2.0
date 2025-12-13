@@ -4,6 +4,19 @@
 
 <main class="container mt-4">
   <h1 class="text-center">Welcome to Spotilytics</h1>
+  <p class="text-center mt-2">
+    Total cards on this page: <strong id="card-count">0</strong>
+  </p>
+
+  <script>
+      document.addEventListener("turbo:load", () => {
+          const el = document.getElementById("card-count");
+          if (!el) return;
+
+          const count = document.querySelectorAll(".contributor-card, .card").length;
+          el.textContent = count;
+      });
+  </script>
   <div class="hero-carousel mt-4 text-center">
     <div class="slides">
       <%= image_tag "spotify.png", alt: "Spotify Logo Placeholder", class: "carousel-image" %>
